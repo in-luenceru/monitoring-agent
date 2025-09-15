@@ -1,0 +1,36 @@
+[Unit]
+Description=Monitoring Agent Security Platform
+Documentation=https://docs.monitoring-solutions.com
+After=network.target
+Wants=network.target
+
+[Service]
+Type=forking
+User=root
+Group=root
+ExecStartPre=/home/anandhu/monitor/bin/monitoring-control testconfig
+ExecStart=/home/anandhu/monitor/bin/monitoring-control start
+ExecStop=/home/anandhu/monitor/bin/monitoring-control stop
+ExecReload=/home/anandhu/monitor/bin/monitoring-control reload
+PIDFile=/home/anandhu/monitor/var/run/monitoring-agentd-*.pid
+TimeoutSec=300
+RestartSec=5
+Restart=on-failure
+RestartPreventExitStatus=1
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/anandhu/monitor
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=32768
+
+[Install]
+WantedBy=multi-user.target

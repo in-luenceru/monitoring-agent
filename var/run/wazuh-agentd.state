@@ -1,0 +1,23 @@
+# State file for wazuh-agentd
+
+# Agent status:
+# - pending:      waiting to get connected.
+# - connected:    connection established with manager in the last 10 seconds.
+# - disconnected: connection lost or no ACK received in the last 60 seconds.
+status='connected'
+
+# Last time a keepalive was sent
+last_keepalive='2025-09-15 11:48:52'
+
+# Last time a control message was received
+last_ack='2025-09-15 11:48:52'
+
+# Number of generated events
+msg_count='0'
+
+# Number of messages (events + control messages) sent to the manager
+msg_sent='42'
+
+# Number of events currently buffered
+# Empty if anti-flooding mechanism is disabled
+msg_buffer='0'
