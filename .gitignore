@@ -1,0 +1,28 @@
+# Ignore log files
+logs/*.log
+logs/ossec.log*
+logs/wazuh-*.log*
+
+# Ignore runtime files
+var/run/*
+var/lib/*
+queue/rids/*
+queue/agents/*
+queue/diff/*
+queue/ossec/*
+
+# Ignore backup files
+etc/ossec.conf.backup.*
+etc/*.save
+
+# Ignore database files
+backup/db/*.gz
+
+# Ignore temporary files
+tmp/*
+.setup_complete
+
+# Keep directory structure but ignore contents
+!logs/.gitkeep
+!var/run/.gitkeep
+!queue/rids/.gitkeep
