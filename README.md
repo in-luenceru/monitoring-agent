@@ -168,6 +168,9 @@ sudo docker exec -it wazuh-manager /bin/bash
 # Manage agents from Docker
 sudo docker exec -it wazuh-manager /var/ossec/bin/manage_agents
 
+#List active agent that are connected to manager
+sudo docker exec -it wazuh-manager /var/ossec/bin/agent_control -l
+
 # Stop manager
 sudo docker stop wazuh-manager
 
@@ -234,10 +237,10 @@ sudo /var/ossec/bin/manage_agents
 
 ```bash
 # Start enrollment process
-./monitoring-agent-control.sh enroll <MANAGER_IP>
+./monitoring-agent-control.sh enroll <MANAGER_IP:port>
 
 # Example with Docker manager
-./monitoring-agent-control.sh enroll 172.17.0.2
+./monitoring-agent-control.sh enroll 172.17.0.2:1514
 ```
 
 **Interactive Process:**
@@ -398,7 +401,7 @@ Manager IP: 172.17.0.2           # Actual manager IP
 **Solution**: Our enrollment automatically handles this
 ```bash
 # Re-enroll with correct manager IP
-./monitoring-agent-control.sh enroll 172.17.0.2
+./monitoring-agent-control.sh enroll 172.17.0.2:1514
 # Enter the same client key - IP will be corrected automatically
 ```
 
@@ -505,10 +508,10 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ```powershell
 # PowerShell enrollment (same process as Linux)
-.\monitoring-agent-control.ps1 enroll <MANAGER_IP>
+.\monitoring-agent-control.ps1 enroll <MANAGER_IP:PORT>
 
 # Example
-.\monitoring-agent-control.ps1 enroll 172.17.0.2
+.\monitoring-agent-control.ps1 enroll 172.17.0.2:1514
 ```
 
 ### Windows Configuration
@@ -638,7 +641,7 @@ sudo ufw allow out 1514/tcp
 
 | Command | Description |
 |---------|-------------|
-| `enroll <ip>` | Interactive enrollment |
+| `enroll <ip:port>` | Interactive enrollment |
 | `start` | Start agent (auto-setup) |
 | `stop` | Stop agent |
 | `status` | Show status |
