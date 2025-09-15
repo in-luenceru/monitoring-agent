@@ -1,15 +1,20 @@
 # Ignore log files
-logs/*.log
+logs/*
 logs/ossec.log*
 logs/wazuh-*.log*
 
-# Ignore runtime files
+# Ignore runtime files and queue databases
 var/run/*
 var/lib/*
+queue/**
 queue/rids/*
 queue/agents/*
 queue/diff/*
 queue/ossec/*
+queue/fim/**
+queue/logcollector/**
+queue/sockets/**
+queue/syscollector/**
 
 # Ignore backup files
 etc/ossec.conf.backup.*
@@ -26,4 +31,5 @@ tmp/*
 !logs/.gitkeep
 !var/run/.gitkeep
 !queue/rids/.gitkeep
+# Ensure client keys file isn't committed
 etc/client.keys
