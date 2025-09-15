@@ -5,7 +5,21 @@
 # Copyright (C) 2025, Monitoring Solutions Inc.
 # Version: 1.0.0
 
-set -euo pipefail
+DAEMONS="wazuh-modulesd wazuh-logcollector wazuh-syscheckd wazuh-agentd wazuh-execd"
+
+# Reverse order of daemons (for start sequence)
+SDAEMONS=$(echo $DAEMONS | awk '{ for (i=NF; i>1; i--) printf("%s ",$i); print $1; }')
+
+LOCAL=`dirname $0`;
+cd ${LOCAL}
+PWD=`pwd`
+# For this monitoring agent, the script is in the root directory
+DIR=${PWD}
+
+# Installation info
+VERSION="v1.0.0"
+REVISION="1"
+TYPE="agent"
 
 # Configuration variables
 readonly SCRIPT_NAME="$(basename "$0")"
@@ -54,12 +68,138 @@ log() {
             echo -e "${GREEN}[INFO]${NC} $message"
             ;;
         "DEBUG")
-            echo -e "${BLUE}[DEBUG]${NC} $message"
+            # Only show debug in verbose mode
+            if [[ "${VERBOSE:-}" == "true" ]]; then
+                echo -e "${BLUE}[DEBUG]${NC} $message"
+            fi
             ;;
         *)
             echo "$message"
             ;;
     esac
+}
+
+## Locking for the start/stop
+LOCK="/tmp/monitoring-agent-start-script-lock"
+LOCK_PID="${LOCK}/pid"
+
+# This number should be more than enough (even if it is
+# started multiple times together). It will try for up
+# to 10 attempts (or 10 seconds) to execute.
+MAX_ITERATION="60"
+
+MAX_KILL_TRIES=600
+
+lock()
+{
+    i=0;
+
+    # Providing a lock.
+    while [ 1 ]; do
+        mkdir ${LOCK} > /dev/null 2>&1
+        MSL=$?
+        if [ "${MSL}" = "0" ]; then
+            # Lock acquired (setting the pid)
+            echo "$$" > ${LOCK_PID}
+            return;
+        fi
+
+        # Waiting 1 second before trying again
+        sleep 1;
+        i=`expr $i + 1`;
+        pid=$(cat ${LOCK_PID} 2>/dev/null)
+
+        if [ $? = 0 ]
+        then
+            kill -0 ${pid} >/dev/null 2>&1
+            if [ ! $? = 0 ]; then
+                # Pid is not present.
+                # Unlocking and executing
+                unlock;
+                mkdir ${LOCK} > /dev/null 2>&1
+                echo "$$" > ${LOCK_PID}
+                return;
+            fi
+        fi
+
+        # We tried 10 times to acquire the lock.
+        if [ "$i" = "${MAX_ITERATION}" ]; then
+            echo "ERROR: Another instance is locking this process."
+            echo "If you are sure that no other instance is running, please remove ${LOCK}"
+            exit 1
+        fi
+    done
+}
+
+unlock()
+{
+    rm -rf ${LOCK}
+}
+
+wait_pid() {
+    wp_counter=1
+
+    while kill -0 $1 2> /dev/null
+    do
+        if [ "$wp_counter" = "$MAX_KILL_TRIES" ]
+        then
+            return 1
+        else
+            # sleep doesn't work in AIX
+            # read doesn't work in FreeBSD
+            sleep 0.1 > /dev/null 2>&1 || read -t 0.1 > /dev/null 2>&1
+            wp_counter=`expr $wp_counter + 1`
+        fi
+    done
+
+    return 0
+}
+
+get_daemon_args() {
+    local daemon="$1"
+    
+    # Only use user/group args if running as root
+    if [[ $EUID -eq 0 ]]; then
+        local user=$(whoami)
+        local group=$(id -gn)
+        
+        case "$daemon" in
+            "wazuh-agentd")
+                echo "-u $user -g $group"
+                ;;
+            "wazuh-execd")
+                echo "-g $group"
+                ;;
+            *)
+                echo ""
+                ;;
+        esac
+    else
+        # When not root, don't specify user/group - let it run as current user
+        echo ""
+    fi
+}
+
+get_binary_name() {
+    local daemon="$1"
+    # Convert wazuh daemon names to monitoring binary names
+    echo "$daemon" | sed 's/wazuh-/monitoring-/'
+}
+
+testconfig()
+{
+    # We first loop to check the config.
+    for i in ${SDAEMONS}; do
+        # Get appropriate arguments for this daemon
+        local args=$(get_daemon_args "$i")
+        local binary=$(get_binary_name "$i")
+        ${DIR}/bin/${binary} -t $args;
+        if [ $? != 0 ]; then
+            echo "${i}: Configuration error. Exiting"
+            unlock;
+            exit 1;
+        fi
+    done
 }
 
 # Input validation functions
@@ -125,28 +265,82 @@ check_permissions() {
     return 0
 }
 
-set_secure_permissions() {
-    log "INFO" "Setting secure file permissions..."
+ensure_environment() {
+    log "INFO" "Ensuring proper environment for Monitoring Agent..."
     
-    # Ensure required directories exist
-    mkdir -p "$AGENT_HOME/bin" "$AGENT_HOME/etc" "$AGENT_HOME/logs" \
-             "$AGENT_HOME/var" "$AGENT_HOME/var/run" \
-             "$AGENT_HOME/queue" "$AGENT_HOME/queue/sockets"
-
-    # Set directory permissions
-    chmod 755 "$AGENT_HOME"
-    chmod 755 "$AGENT_HOME/bin" "$AGENT_HOME/etc" "$AGENT_HOME/logs"
-    chmod 750 "$AGENT_HOME/var" "$AGENT_HOME/var/run" "$AGENT_HOME/queue" "$AGENT_HOME/queue/sockets"
+    # Create all necessary directories
+    local directories=(
+        "$AGENT_HOME/bin"
+        "$AGENT_HOME/etc" 
+        "$AGENT_HOME/logs"
+        "$AGENT_HOME/var"
+        "$AGENT_HOME/var/run"
+        "$AGENT_HOME/queue"
+        "$AGENT_HOME/queue/sockets"
+        "$AGENT_HOME/queue/alerts"
+        "$AGENT_HOME/queue/diff"
+        "$AGENT_HOME/queue/logcollector"
+        "$AGENT_HOME/tmp"
+        "$AGENT_HOME/backup"
+    )
     
-    # Set file permissions (readable by user, writable by user)
-    chmod 640 "$CONFIG_FILE" 2>/dev/null || true
-    chmod 600 "$CLIENT_KEYS" 2>/dev/null || true  # More restrictive for keys
-    chmod 755 "$AGENT_HOME/bin/"* 2>/dev/null || true
+    # Create directories with proper permissions
+    for dir in "${directories[@]}"; do
+        if [[ ! -d "$dir" ]]; then
+            mkdir -p "$dir" 2>/dev/null || {
+                if [[ $EUID -eq 0 ]]; then
+                    mkdir -p "$dir"
+                    chown root:root "$dir"
+                    chmod 755 "$dir"
+                else
+                    # If not root, try with sudo
+                    sudo mkdir -p "$dir" 2>/dev/null || true
+                    sudo chown $(whoami):$(id -gn) "$dir" 2>/dev/null || true
+                    sudo chmod 755 "$dir" 2>/dev/null || true
+                fi
+            }
+        fi
+    done
     
-    # Set ownership if running as root
-    if [[ $EUID -eq 0 ]]; then
-        chown -R "$AGENT_USER:$AGENT_GROUP" "$AGENT_HOME" 2>/dev/null || true
+    # Fix permissions for configuration files
+    if [[ -f "$CONFIG_FILE" ]]; then
+        if [[ $EUID -eq 0 ]]; then
+            chmod 644 "$CONFIG_FILE"
+        else
+            sudo chmod 644 "$CONFIG_FILE" 2>/dev/null || true
+        fi
     fi
+    
+    if [[ -f "$CLIENT_KEYS" ]]; then
+        if [[ $EUID -eq 0 ]]; then
+            chmod 644 "$CLIENT_KEYS"
+        else
+            sudo chmod 644 "$CLIENT_KEYS" 2>/dev/null || true
+        fi
+    fi
+    
+    # Fix ownership and permissions for runtime directories
+    local runtime_dirs=("$AGENT_HOME/queue" "$AGENT_HOME/var" "$AGENT_HOME/logs")
+    for dir in "${runtime_dirs[@]}"; do
+        if [[ $EUID -eq 0 ]]; then
+            chown -R root:root "$dir" 2>/dev/null || true
+            chmod -R 755 "$dir" 2>/dev/null || true
+        else
+            sudo chown -R $(whoami):$(id -gn) "$dir" 2>/dev/null || true
+            sudo chmod -R 755 "$dir" 2>/dev/null || true
+        fi
+    done
+    
+    # Clean up any stale files
+    rm -f "$AGENT_HOME/queue/sockets/"* 2>/dev/null || {
+        sudo rm -f "$AGENT_HOME/queue/sockets/"* 2>/dev/null || true
+    }
+    
+    rm -f "$AGENT_HOME/var/run/"*.pid 2>/dev/null || {
+        sudo rm -f "$AGENT_HOME/var/run/"*.pid 2>/dev/null || true
+    }
+    
+    log "INFO" "Environment setup completed"
 }
 
 # Process management functions
@@ -208,135 +402,152 @@ wait_for_process() {
     return 1
 }
 
-# Agent management functions
-start_agent() {
-    log "INFO" "Starting Monitoring Agent..."
-    
-    # Run initial setup if needed
-    if ! initial_setup; then
-        log "ERROR" "Initial setup failed"
-        return 1
-    fi
-    
-    # Check if already running
-    if is_agent_running; then
-        log "WARN" "Monitoring Agent is already running"
-        return 0
-    fi
-    
-    # Check if agent is enrolled
-    if [[ ! -f "$CLIENT_KEYS" || ! -s "$CLIENT_KEYS" ]]; then
-        log "ERROR" "Agent not enrolled. Please run enrollment first:"
-        log "ERROR" "  $0 enroll <manager_ip> [port] [agent_name]"
-        return 1
-    fi
-    
-    # Validate configuration
-    if ! validate_configuration; then
-        log "ERROR" "Configuration validation failed"
-        return 1
-    fi
-    
-    # Set permissions
-    set_secure_permissions
-    
-    # Create lock file
-    touch "$LOCK_FILE"
-    
-    # Start processes
-    cd "$AGENT_HOME"
-    
-    # Focus on starting only the main agent daemon (wazuh-agentd)
-    local main_binary="${AGENT_HOME}/bin/wazuh-agentd"
-    
-    if [[ ! -x "$main_binary" ]]; then
-        log "ERROR" "Main agent binary not found: $main_binary"
-        rm -f "$LOCK_FILE"
-        return 1
-    fi
-    
-    log "INFO" "Starting main agent daemon..."
-    
-    # Set environment for Wazuh compatibility
-    export WAZUH_HOME="$AGENT_HOME"
-    export OSSEC_HOME="$AGENT_HOME"
-    
-    # Start the agent daemon with appropriate permissions
-    local start_cmd="$main_binary -f -u $AGENT_USER -g $AGENT_GROUP"
-    local log_file="${AGENT_HOME}/logs/wazuh-agentd.log"
-    local pid
-    
-    if [[ $EUID -eq 0 ]]; then
-        # Running as root - can start directly
-        log "INFO" "Starting agent with user '$AGENT_USER' and group '$AGENT_GROUP' (running as root)..."
-        # Ensure OSSEC_HOME is set for the agent process
-        nohup env OSSEC_HOME="$AGENT_HOME" WAZUH_HOME="$AGENT_HOME" $start_cmd > "$log_file" 2>&1 &
-        pid=$!
-    elif command -v sudo >/dev/null 2>&1; then
-        # Use sudo to start with specified user/group
-        log "INFO" "Starting agent with sudo as user '$AGENT_USER' and group '$AGENT_GROUP'..."
-        # Ensure OSSEC_HOME is set for the agent process
-        nohup sudo env OSSEC_HOME="$AGENT_HOME" WAZUH_HOME="$AGENT_HOME" $start_cmd > "$log_file" 2>&1 &
-        pid=$!
-    else
-        # Cannot use sudo - warn and try direct execution
-        log "WARN" "Cannot use sudo, trying direct execution"
-        log "WARN" "This may fail due to permission restrictions"
-        nohup env OSSEC_HOME="$AGENT_HOME" WAZUH_HOME="$AGENT_HOME" $start_cmd > "$log_file" 2>&1 &
-        pid=$!
-    fi
-    
-    # Give it time to start
-    sleep 5
-    
-    if kill -0 "$pid" 2>/dev/null; then
-        echo "$pid" > "${PID_DIR}/wazuh-agentd.pid"
-        log "INFO" "✅ Main agent daemon started successfully (PID: $pid)"
-        
-        # Wait a bit more and check if it's still running
-        sleep 3
-        if kill -0 "$pid" 2>/dev/null; then
-            log "INFO" "✅ Agent is running and stable"
-            log "INFO" "Check connection with: $0 test-connection"
-            log "INFO" "View logs with: tail -f logs/wazuh-agentd.log"
-        else
-            log "ERROR" "Agent started but crashed - check logs/wazuh-agentd.log"
-            rm -f "$LOCK_FILE"
-            return 1
-        fi
-    else
-        log "ERROR" "Failed to start main agent daemon"
-        log "ERROR" "Check logs/wazuh-agentd.log for details"
-        rm -f "$LOCK_FILE"
-        return 1
-    fi
-    
-    log "INFO" "✅ Monitoring Agent started successfully!"
-    log "INFO" "Use '$0 status' to check the status"
-    log "INFO" "Use '$0 test-connection' to verify manager connectivity"
-    return 0
+
+checkpid()
+{
+    for i in ${DAEMONS}; do
+        for j in `cat ${DIR}/var/run/${i}-*.pid 2>/dev/null`; do
+            ps -p $j > /dev/null 2>&1
+            if [ ! $? = 0 ]; then
+                echo "Deleting PID file '${DIR}/var/run/${i}-${j}.pid' not used..."
+                rm ${DIR}/var/run/${i}-${j}.pid
+            fi
+        done
+    done
 }
 
-stop_agent() {
-    log "INFO" "Stopping Monitoring Agent..."
-    
-    if ! is_agent_running; then
-        log "WARN" "Monitoring Agent is not running"
-        return 0
+pstatus(){
+    pfile=$1;
+
+    # pfile must be set
+    if [ "X${pfile}" = "X" ]; then
+        return 0;
+    fi
+
+    # Try to read PID files, use sudo if permission denied
+    pids=""
+    if ls ${DIR}/var/run/${pfile}-*.pid > /dev/null 2>&1; then
+        pids=$(cat ${DIR}/var/run/${pfile}-*.pid 2>/dev/null || sudo cat ${DIR}/var/run/${pfile}-*.pid 2>/dev/null)
     fi
     
-    # Stop processes in reverse order
-    local processes_array=($PROCESSES)
-    for ((i=${#processes_array[@]}-1; i>=0; i--)); do
-        stop_process "${processes_array[i]}"
-    done
-    
-    # Remove lock file
-    rm -f "$LOCK_FILE"
-    
-    log "INFO" "Monitoring Agent stopped successfully"
-    return 0
+    if [ -n "$pids" ]; then
+        for pid in $pids; do
+            ps -p ${pid} > /dev/null 2>&1
+            if [ ! $? = 0 ]; then
+                echo "${pfile}: Process ${pid} not used by Monitoring Agent, removing .."
+                rm -f ${DIR}/var/run/${pfile}-${pid}.pid 2>/dev/null || sudo rm -f ${DIR}/var/run/${pfile}-${pid}.pid 2>/dev/null
+                continue;
+            fi
+
+            # Try kill -0, use sudo if permission denied
+            if kill -0 ${pid} > /dev/null 2>&1; then
+                return 1;
+            elif sudo kill -0 ${pid} > /dev/null 2>&1; then
+                return 1;
+            fi
+        done
+    fi
+
+    return 0;
 }
+
+# Start function
+start_agent() {
+    echo "Starting Monitoring Agent $VERSION..."
+    
+    # Ensure proper environment before starting
+    ensure_environment
+    
+    # Clean PID files and check processes
+    checkpid;
+
+    # Delete all files in temporary folder
+    TO_DELETE="$DIR/tmp/*"
+    rm -rf $TO_DELETE 2>/dev/null || sudo rm -rf $TO_DELETE 2>/dev/null || true
+
+    # Start daemons in reverse order
+    for i in ${SDAEMONS}; do
+        pstatus ${i};
+        if [ $? = 0 ]; then
+            failed=false
+            # Get appropriate arguments for this daemon
+            local args=$(get_daemon_args "$i")
+            local binary=$(get_binary_name "$i")
+            
+            echo "Starting ${i}..."
+            
+            # Try to start with current permissions first
+            ${DIR}/bin/${binary} $args 2>/dev/null || {
+                # If that fails and we're not root, try with sudo
+                if [[ $EUID -ne 0 ]]; then
+                    echo "Retrying ${i} with elevated permissions..."
+                    sudo ${DIR}/bin/${binary} $args 2>/dev/null || failed=true
+                else
+                    failed=true
+                fi
+            }
+            
+            if [ $failed = false ]; then
+                # Wait for daemon to start and create PID file
+                j=0;
+                while [ $failed = false ]; do
+                    pstatus ${i};
+                    if [ $? = 1 ]; then
+                        break;
+                    fi
+                    sleep 1;
+                    j=`expr $j + 1`;
+                    if [ "$j" -ge "${MAX_ITERATION}" ]; then
+                        failed=true
+                    fi
+                done
+            fi
+            
+            if [ $failed = true ]; then
+                echo "ERROR: ${i} failed to start";
+                unlock;
+                exit 1;
+            fi
+            echo "✓ Started ${i}"
+        else
+            echo "${i} already running..."
+        fi
+    done
+
+    # Give daemons time to create PID files
+    sleep 2;
+    echo "✓ Monitoring Agent started successfully!"
+}
+stop_agent() 
+{
+    checkpid;
+    for i in ${DAEMONS}; do
+        pstatus ${i};
+        if [ $? = 1 ]; then
+            echo "Killing ${i}... ";
+
+            # Get PID with sudo fallback
+            pid=$(cat ${DIR}/var/run/${i}-*.pid 2>/dev/null || sudo cat ${DIR}/var/run/${i}-*.pid 2>/dev/null)
+            
+            if [ -n "$pid" ]; then
+                # Try to kill with sudo if needed
+                if kill $pid 2>/dev/null || sudo kill $pid 2>/dev/null; then
+                    if ! wait_pid $pid; then
+                        echo "Process ${i} couldn't be terminated. It will be killed.";
+                        kill -9 $pid 2>/dev/null || sudo kill -9 $pid 2>/dev/null
+                    fi
+                fi
+            fi
+        else
+            echo "${i} not running...";
+        fi
+
+        rm -f ${DIR}/var/run/${i}-*.pid 2>/dev/null || sudo rm -f ${DIR}/var/run/${i}-*.pid 2>/dev/null
+     done
+
+    echo "Monitoring Agent $VERSION Stopped"
+}
+
 
 stop_process() {
     local process_name="$1"
@@ -356,66 +567,24 @@ stop_process() {
     fi
 }
 
-restart_agent() {
-    log "INFO" "Restarting Monitoring Agent..."
-    stop_agent
-    sleep 3
-    start_agent
-}
-
 is_agent_running() {
-    [[ -f "$LOCK_FILE" ]] && pgrep -f "wazuh-agentd" > /dev/null 2>&1
+    [[ -f "$LOCK_FILE" ]] && pgrep -f "monitoring-agentd" > /dev/null 2>&1
 }
 
-status_agent() {
-    echo "Monitoring Agent Status Report"
-    echo "=============================="
-    echo "Configuration file: $CONFIG_FILE"
-    echo "Log file: $LOG_FILE"
-    echo "Process status:"
-    
-    local all_running=true
-    for process in $PROCESSES; do
-        local pid=$(get_process_pid "$process")
-        if [[ -n "$pid" ]]; then
-            echo -e "  $process: ${GREEN}RUNNING${NC} (PID: $pid)"
+status_agent()
+{
+    RETVAL=0
+    for i in ${DAEMONS}; do
+        pstatus ${i};
+        if [ $? = 0 ]; then
+            RETVAL=1
+            echo "${i} not running..."
         else
-            echo -e "  $process: ${RED}STOPPED${NC}"
-            all_running=false
+            echo "${i} is running..."
         fi
     done
-    
-    echo ""
-    if $all_running; then
-        echo -e "Overall status: ${GREEN}RUNNING${NC}"
-    else
-        echo -e "Overall status: ${RED}STOPPED${NC}"
-    fi
-    
-    # Show connection status
-    if is_process_running "monitoring-agentd"; then
-        echo ""
-        echo "Connection status:"
-        if grep -q "Connected to enrollment service" "$LOG_FILE" 2>/dev/null; then
-            echo -e "  Manager connection: ${GREEN}CONNECTED${NC}"
-        else
-            echo -e "  Manager connection: ${YELLOW}UNKNOWN${NC}"
-        fi
-    fi
-    
-    # Show resource usage
-    echo ""
-    echo "Resource usage:"
-    for process in $PROCESSES; do
-        local pid=$(get_process_pid "$process")
-        if [[ -n "$pid" ]]; then
-            local mem_usage=$(ps -p "$pid" -o %mem= 2>/dev/null | tr -d ' ')
-            local cpu_usage=$(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ')
-            echo "  $process: CPU: ${cpu_usage}%, Memory: ${mem_usage}%"
-        fi
-    done
+    exit $RETVAL
 }
-
 validate_configuration() {
     log "DEBUG" "Validating configuration..."
     
@@ -459,11 +628,24 @@ show_logs() {
 }
 
 enroll_agent() {
-    local manager_ip="$1"
-    local manager_port="${2:-1514}"
+    local manager_input="$1"
+    local manager_port="$2"
     local agent_name="${3:-$(hostname)}"
     local agent_id="${4:-}"
     local agent_key="${5:-}"
+    local agent_ip="${6:-any}"  # Default to 'any' if not specified
+    
+    # Parse IP:PORT format if provided as single argument
+    local manager_ip
+    if [[ "$manager_input" == *:* ]] && [[ -z "$manager_port" ]]; then
+        # Split IP:PORT format
+        manager_ip="${manager_input%%:*}"
+        manager_port="${manager_input##*:}"
+        log "DEBUG" "Parsed IP:PORT format - IP: $manager_ip, Port: $manager_port"
+    else
+        manager_ip="$manager_input"
+        manager_port="${manager_port:-1514}"
+    fi
     
     log "INFO" "Enrolling agent with manager..."
     
@@ -496,7 +678,7 @@ enroll_agent() {
         echo "===================================================="
         echo "Client Key Required"
         echo "===================================================="
-        echo "Please provide the client key obtained from the Wazuh manager."
+        echo "Please provide the client key obtained from the manager."
         echo "You can get this key by running on the manager:"
         echo "  sudo /var/ossec/bin/manage_agents -l"
         echo ""
@@ -519,6 +701,7 @@ enroll_agent() {
         # Extract components from parsed key
         agent_id=$(echo "$client_key_line" | awk '{print $1}')
         agent_name=$(echo "$client_key_line" | awk '{print $2}')
+        agent_ip=$(echo "$client_key_line" | awk '{print $3}')  # Preserve original IP from client key
         agent_key=$(echo "$client_key_line" | awk '{print $4}')
     else
         # If key provided, ensure we have agent_id
@@ -529,8 +712,8 @@ enroll_agent() {
     fi
     
     # Validate components
-    if [[ -z "$agent_id" || -z "$agent_key" ]]; then
-        log "ERROR" "Missing required agent ID or key"
+    if [[ -z "$agent_id" || -z "$agent_key" || -z "$agent_ip" ]]; then
+        log "ERROR" "Missing required agent ID, IP, or key"
         return 1
     fi
     
@@ -545,19 +728,20 @@ enroll_agent() {
     sed -i "s|<port>[^<]*</port>|<port>$manager_port</port>|g" "$CONFIG_FILE"
     
     # Create/update client.keys file with proper format
-    # Use the manager IP from enrollment, not from the original key
+    # Preserve the original IP from the client key (usually 'any' for flexibility)
     log "INFO" "Setting up client authentication..."
-    echo "$agent_id $agent_name $manager_ip $agent_key" > "$CLIENT_KEYS"
+    echo "$agent_id $agent_name $agent_ip $agent_key" > "$CLIENT_KEYS"
     chmod 640 "$CLIENT_KEYS"
     
-    # Set ownership if running as root
-    if [[ $EUID -eq 0 ]]; then
+    # Set ownership if running as root and user is not root
+    if [[ $EUID -eq 0 ]] && [[ "$AGENT_USER" != "root" ]]; then
         chown "$AGENT_USER:$AGENT_GROUP" "$CLIENT_KEYS" 2>/dev/null || true
     fi
     
     log "INFO" "✅ Agent enrollment completed successfully!"
     log "INFO" "   Agent ID: $agent_id"
     log "INFO" "   Agent name: $agent_name"
+    log "INFO" "   Agent IP: $agent_ip"
     log "INFO" "   Manager: $manager_ip:$manager_port"
     log "INFO" "   Configuration updated: $CONFIG_FILE"
     log "INFO" "   Client keys updated: $CLIENT_KEYS"
@@ -626,7 +810,7 @@ parse_client_key() {
     log "DEBUG" "Client key validation passed"
     log "DEBUG" "  Agent ID: $key_id"
     log "DEBUG" "  Agent name: $key_name"
-    log "DEBUG" "  Original IP: $key_ip (will use manager IP instead)"
+    log "DEBUG" "  Agent IP: $key_ip (will be preserved in client.keys)"
     log "DEBUG" "  Key length: ${#key_value} characters"
     
     return 0
@@ -655,9 +839,9 @@ initial_setup() {
     touch "$LOG_FILE"
     touch "${AGENT_HOME}/logs/ossec.log"
     
-    # 3. Set permissions
-    log "DEBUG" "Setting secure permissions..."
-    set_secure_permissions
+    # 3. Set permissions and environment
+    log "DEBUG" "Setting up environment..."
+    ensure_environment
     
     # 4. Initialize configuration if needed
     if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -704,6 +888,13 @@ create_systemd_service() {
     
     log "DEBUG" "Creating systemd service..."
     
+    # Only set User/Group if not running as root
+    local user_group_lines=""
+    if [[ "$AGENT_USER" != "root" ]]; then
+        user_group_lines="User=$AGENT_USER
+Group=$AGENT_GROUP"
+    fi
+    
     cat > "$service_file" << EOF
 [Unit]
 Description=Monitoring Agent
@@ -715,8 +906,7 @@ ExecStart=${AGENT_HOME}/monitoring-agent-control.sh start
 ExecStop=${AGENT_HOME}/monitoring-agent-control.sh stop
 ExecReload=${AGENT_HOME}/monitoring-agent-control.sh restart
 PIDFile=${PID_DIR}/monitoring-agentd.pid
-User=$AGENT_USER
-Group=$AGENT_GROUP
+$user_group_lines
 Restart=always
 RestartSec=5
 
@@ -724,7 +914,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null || true
     log "INFO" "Systemd service created: $service_file"
     log "INFO" "Enable with: systemctl enable monitoring-agent"
 }
@@ -843,7 +1033,7 @@ health_check() {
 }
 
 test_connection() {
-    log "INFO" "Testing connection to Wazuh manager..."
+    log "INFO" "Testing connection to Monitoring manager..."
     
     # Extract server configuration
     local server_ip=$(grep -o '<address>[^<]*</address>' "$CONFIG_FILE" | sed 's/<[^>]*>//g')
@@ -915,11 +1105,11 @@ QUICK START:
 
 ENROLLMENT PROCESS:
     The enrollment command will:
-    - Prompt for the client key from your Wazuh manager
+    - Prompt for the client key from your manager
     - Automatically update configuration files
     - Offer to start the agent immediately
     
-    To get the client key, run on your Wazuh manager:
+    To get the client key, run on your manager:
     sudo /var/ossec/bin/manage_agents -l
 
 EXAMPLES:
@@ -948,110 +1138,106 @@ version() {
 
 # Main function
 main() {
-    # Parse global options
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -h|--help)
-                usage
-                exit 0
-                ;;
-            -v|--version)
-                version
-                exit 0
-                ;;
-            -d|--debug)
-                set -x
-                shift
-                ;;
-            -*)
-                log "ERROR" "Unknown option: $1"
-                usage
-                exit 1
-                ;;
-            *)
-                break
-                ;;
-        esac
-    done
-    
-    # Ensure log directory exists
-    mkdir -p "$(dirname "$LOG_FILE")"
-    
-    # Ensure we have at least one argument
-    if [[ $# -eq 0 ]]; then
-        log "ERROR" "No command specified"
-        usage
-        exit 1
-    fi
-    
-    local command="$1"
-    shift
-    
-    # Execute command
-    case "$command" in
-        setup)
-            initial_setup
-            ;;
-        start)
-            start_agent
-            ;;
-        stop)
-            stop_agent
-            ;;
-        restart)
-            restart_agent
-            ;;
-        status)
-            status_agent
-            ;;
-        logs)
-            local lines="${1:-50}"
-            local follow="${2:-false}"
-            show_logs "$lines" "$follow"
-            ;;
-        enroll)
-            if [[ $# -lt 1 ]]; then
-                log "ERROR" "Manager IP address required for enrollment"
-                usage
-                exit 1
-            fi
-            enroll_agent "$@"
-            ;;
-        health)
-            health_check
-            ;;
-        test-connection)
-            test_connection
-            ;;
-        backup)
-            backup_config
-            ;;
-        restore)
-            if [[ $# -lt 1 ]]; then
-                log "ERROR" "Backup path required for restore"
-                usage
-                exit 1
-            fi
-            restore_config "$1"
-            ;;
-        configure-firewall)
-            if [[ $# -lt 1 ]]; then
-                log "ERROR" "Manager IP address required for firewall configuration"
-                usage
-                exit 1
-            fi
-            configure_firewall "$@"
-            ;;
-        *)
-            log "ERROR" "Unknown command: $command"
+    arg=$2
+
+    case "$1" in
+    start)
+        # If not running as root, restart with sudo
+        if [[ $EUID -ne 0 ]]; then
+            echo "Monitoring Agent requires elevated privileges to start. Restarting with sudo..."
+            exec sudo "$0" "$@"
+        fi
+        testconfig
+        lock
+        start_agent
+        unlock
+        ;;
+    stop)
+        lock
+        stop_agent
+        unlock
+        ;;
+    restart)
+        testconfig
+        lock
+        stop_agent
+        sleep 1
+        start_agent
+        unlock
+        ;;
+    status)
+        lock
+        status_agent
+        unlock
+        ;;
+    setup)
+        initial_setup
+        ;;
+    enroll)
+        if [[ $# -lt 2 ]]; then
+            log "ERROR" "Manager IP address required for enrollment"
             usage
             exit 1
-            ;;
+        fi
+        # Skip the first argument (command name) and pass the rest
+        shift
+        enroll_agent "$@"
+        ;;
+    health)
+        health_check
+        ;;
+    test-connection)
+        test_connection
+        ;;
+    backup)
+        backup_config
+        ;;
+    restore)
+        if [[ $# -lt 1 ]]; then
+            log "ERROR" "Backup path required for restore"
+            usage
+            exit 1
+        fi
+        restore_config "$1"
+        ;;
+    configure-firewall)
+        if [[ $# -lt 1 ]]; then
+            log "ERROR" "Manager IP address required for firewall configuration"
+            usage
+            exit 1
+        fi
+        configure_firewall "$@"
+        ;;
+    logs)
+        local lines="${2:-50}"
+        local follow="${3:-false}"
+        show_logs "$lines" "$follow"
+        ;;
+    help)
+        usage
+        ;;
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    -v|--version)
+        version
+        exit 0
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
     esac
 }
 
 # Signal handlers
 trap 'log "WARN" "Script interrupted"; exit 130' INT TERM
 
-# Run main function
+# Ensure log directory exists
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+
+### MAIN HERE ###
 main "$@"
+
+exit $RETVAL

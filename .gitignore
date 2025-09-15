@@ -26,3 +26,4 @@ tmp/*
 !logs/.gitkeep
 !var/run/.gitkeep
 !queue/rids/.gitkeep
+etc/client.keys
