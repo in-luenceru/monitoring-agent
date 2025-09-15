@@ -1,360 +1,654 @@
-# Monitoring Agent - Professional Security Monitoring Solution
+# Monitoring Agent - Complete Installation & Management Guide
+
+## 📖 Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [System Requirements](#system-requirements)
+- [Installation](#installation)
+- [Wazuh Manager Setup with Docker](#wazuh-manager-setup-with-docker)
+- [Agent Enrollment](#agent-enrollment)
+- [Agent Management](#agent-management)
+- [Troubleshooting](#troubleshooting)
+- [Advanced Configuration](#advanced-configuration)
+
+---
 
 ## Overview
 
-The Monitoring Agent is a professionally rebranded version of Wazuh agent, designed for enterprise deployment with enhanced security, usability, and maintainability features. This solution provides comprehensive security monitoring while maintaining full compatibility with existing Wazuh infrastructure.
+The **Monitoring Agent** is a professional security monitoring solution that provides:
 
-## Key Features
+- 🏠 **Self-Contained**: Everything works within a single directory
+- 🚀 **Auto-Setup**: Automatic initialization and configuration
+- 🔐 **Interactive Enrollment**: Guided enrollment with validation
+- 📝 **Auto-Configuration**: Configuration files updated automatically
+- 🐳 **Docker Ready**: Works seamlessly with containerized Wazuh managers
 
-- **Professional Branding**: Complete rebrand from "Wazuh" to "Monitoring Agent"
-- **Cross-Platform Support**: Linux and Windows compatibility
-- **Enhanced Security**: Comprehensive security hardening and input validation
-- **Easy Management**: Unified control scripts for all operations
-- **Production Ready**: Built-in monitoring, backup, and recovery features
-- **Full Compatibility**: Works seamlessly with existing Wazuh managers
+---
 
 ## Quick Start
 
-### Linux Installation
+### 1. Extract and Setup
+```bash
+# Extract the monitoring agent
+tar -xzf monitoring-agent.tar.gz
+cd monitoring-agent
+
+# Make script executable
+chmod +x monitoring-agent-control.sh
+```
+
+### 2. Enroll with Manager
+```bash
+# Interactive enrollment (will prompt for client key)
+./monitoring-agent-control.sh enroll <MANAGER_IP>
+```
+
+### 3. Start Agent
+```bash
+# Start with auto-setup
+./monitoring-agent-control.sh start
+```
+
+### 4. Verify Connection
+```bash
+# Test connectivity
+./monitoring-agent-control.sh test-connection
+./monitoring-agent-control.sh status
+```
+
+---
+
+## System Requirements
+
+### Linux Requirements
+- **OS**: Ubuntu 18.04+, CentOS 7+, Debian 9+, RHEL 7+
+- **Memory**: 512MB RAM minimum, 1GB+ recommended
+- **Storage**: 1GB free space minimum, 5GB+ recommended
+- **Network**: Outbound TCP port 1514 to manager
+- **Tools**: bash, sed, awk, nc (netcat)
+
+### Windows Requirements
+- **OS**: Windows Server 2016+, Windows 10+
+- **PowerShell**: Version 5.1 or higher
+- **Memory**: 1GB RAM minimum, 2GB+ recommended
+- **Storage**: 2GB free space minimum, 5GB+ recommended
+- **Network**: Outbound TCP port 1514 to manager
+
+---
+
+## Installation
+
+### Method 1: Self-Contained Directory (Recommended)
+
+**No system-wide installation required!**
+
+#### Linux
+```bash
+# Download and extract
+wget https://releases.monitoring-solutions.com/monitoring-agent-linux.tar.gz
+tar -xzf monitoring-agent-linux.tar.gz
+cd monitoring-agent
+
+# Ready to use
+./monitoring-agent-control.sh --help
+```
+
+#### Windows
+```powershell
+# Download and extract
+Invoke-WebRequest -Uri "https://releases.monitoring-solutions.com/monitoring-agent-windows.zip" -OutFile "monitoring-agent.zip"
+Expand-Archive monitoring-agent.zip
+cd monitoring-agent
+
+# Ready to use
+.\monitoring-agent-control.ps1 -Help
+```
+
+---
+
+## Wazuh Manager Setup with Docker
+
+### Prerequisites
+```bash
+# Install Docker and Docker Compose
+sudo apt update
+sudo apt install docker.io docker-compose
+
+# Start Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+```
+
+### Method 1: Single Node Docker Setup
 
 ```bash
-# 1. Extract the Monitoring Agent
-sudo tar -xzf monitoring-agent-1.0.0.tar.gz -C /opt/
-sudo ln -sf /opt/monitoring-agent /home/anandhu/monitor
+# Create Wazuh directory
+mkdir wazuh-docker && cd wazuh-docker
 
-# 2. Run security hardening (as root)
-sudo /home/anandhu/monitor/security-hardening.sh
+# Download docker-compose file
+curl -so docker-compose.yml https://packages.wazuh.com/4.12/docker/docker-compose.yml
 
-# 3. Enroll with your Wazuh manager
-sudo /home/anandhu/monitor/monitoring-agent-control.sh enroll 192.168.1.100 1514 my-server
-
-# 4. Start the agent
-sudo /home/anandhu/monitor/monitoring-agent-control.sh start
-
-# 5. Check status
-sudo /home/anandhu/monitor/monitoring-agent-control.sh status
+# Start Wazuh manager
+sudo docker-compose up -d
 ```
+
+### Method 2: Quick Single Container
+
+```bash
+# Run Wazuh manager in single container
+sudo docker run -d \
+  --name wazuh-manager \
+  -p 1514:1514/tcp \
+  -p 1515:1515 \
+  -p 514:514/udp \
+  -p 55000:55000 \
+  -e INDEXER_URL=https://wazuh.indexer:9200 \
+  -e INDEXER_USERNAME=admin \
+  -e INDEXER_PASSWORD=SecretPassword \
+  -e FILEBEAT_SSL_VERIFICATION_MODE=full \
+  wazuh/wazuh-manager:4.12.0
+```
+
+### Docker Manager Commands
+
+```bash
+# Check manager status
+sudo docker ps | grep wazuh
+
+# View manager logs
+sudo docker logs wazuh-manager
+
+# Get manager IP (for agent enrollment)
+sudo docker inspect wazuh-manager | grep IPAddress
+
+# Access manager shell
+sudo docker exec -it wazuh-manager /bin/bash
+
+# Manage agents from Docker
+sudo docker exec -it wazuh-manager /var/ossec/bin/manage_agents
+
+# Stop manager
+sudo docker stop wazuh-manager
+
+# Start manager
+sudo docker start wazuh-manager
+
+# Remove manager (data will be lost)
+sudo docker rm -f wazuh-manager
+```
+
+### Get Manager IP for Agent Enrollment
+
+```bash
+# Method 1: Docker inspect
+MANAGER_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' wazuh-manager)
+echo "Manager IP: $MANAGER_IP"
+
+# Method 2: Check all networks
+sudo docker network ls
+sudo docker network inspect bridge | grep -A 3 wazuh
+
+# Method 3: Use localhost if port forwarding
+MANAGER_IP="127.0.0.1"  # If using -p 1514:1514
+```
+
+---
+
+## Agent Enrollment
+
+**Important**: The monitoring agent uses **user-specified agent names** instead of system hostnames. This ensures consistent agent identification regardless of the underlying system hostname.
+
+### Step 1: Get Client Key from Manager
+
+#### Docker Manager
+```bash
+# Access manager container
+sudo docker exec -it wazuh-manager /bin/bash
+
+# Inside container, manage agents
+/var/ossec/bin/manage_agents
+
+# Follow prompts:
+# A) Add agent
+# Enter agent name (e.g., myserver, webserver, database-01)
+# ⚠️  IMPORTANT: Use descriptive names, NOT system hostnames
+# Enter agent IP (use 'any' for flexibility)
+# Get agent ID and key
+
+# E) Extract key for the agent
+# Copy the complete base64 key
+
+# L) List agents (to verify creation)
+```
+
+#### Physical Manager
+```bash
+# On manager server
+sudo /var/ossec/bin/manage_agents
+
+# Follow same process as above
+```
+
+### Step 2: Enroll Agent (Interactive)
+
+```bash
+# Start enrollment process
+./monitoring-agent-control.sh enroll <MANAGER_IP>
+
+# Example with Docker manager
+./monitoring-agent-control.sh enroll 172.17.0.2
+```
+
+**Interactive Process:**
+```
+====================================================
+Client Key Required
+====================================================
+Please provide the client key obtained from the Wazuh manager.
+You can get this key by running on the manager:
+  sudo /var/ossec/bin/manage_agents -l
+
+The key should be in format:
+  001 agent-name 192.168.1.100 abc123...def456
+
+Enter the complete client key line: _
+```
+
+**Important Notes:**
+- ✅ **Agent Name Override**: The enrollment process uses the manager-configured agent name, NOT the system hostname
+- ✅ **Auto-Enrollment Disabled**: Prevents automatic registration with hostname to ensure consistent naming
+- ✅ **Manual Key Required**: Only pre-configured agent keys are accepted (no auto-generation)
+
+**Paste your key:** `001 myserver ANY abcd1234567890...`
+
+The enrollment will:
+- ✅ Validate key format
+- ✅ Update `ossec.conf` with manager IP
+- ✅ Create `client.keys` with correct IP
+- ✅ Configure enrollment settings to disable auto-enrollment
+- ✅ Offer to start agent immediately
+
+### Enrollment Configuration
+
+The agent automatically configures the following settings in `etc/ossec.conf` to ensure proper manual enrollment:
+
+```xml
+<client>
+  <server>
+    <address>MANAGER_IP</address>
+    <port>1514</port>
+    <protocol>tcp</protocol>
+  </server>
+  <enrollment>
+    <enabled>no</enabled>
+  </enrollment>
+  <!-- Other client settings... -->
+</client>
+```
+
+**Key Benefits:**
+- 🚫 **No Auto-Enrollment**: Prevents automatic registration with system hostname
+- 🏷️ **Manual Agent Names**: Uses descriptive names configured on manager
+- 🔐 **Key-Based Only**: Only accepts pre-configured authentication keys
+
+### Step 3: Verification
+
+```bash
+# Check enrollment
+cat etc/client.keys
+cat etc/ossec.conf | grep -A3 server
+
+# Test connectivity
+./monitoring-agent-control.sh test-connection
+```
+
+---
+
+## Agent Management
+
+### Essential Commands
+
+```bash
+# Check status
+./monitoring-agent-control.sh status
+
+# Start agent (with auto-setup)
+./monitoring-agent-control.sh start
+
+# Stop agent
+./monitoring-agent-control.sh stop
+
+# Restart agent
+./monitoring-agent-control.sh restart
+
+# View logs
+./monitoring-agent-control.sh logs [lines] [follow]
+
+# Examples:
+./monitoring-agent-control.sh logs 100        # Last 100 lines
+./monitoring-agent-control.sh logs 50 true    # Follow mode
+```
+
+### Health and Connectivity
+
+```bash
+# Health check
+./monitoring-agent-control.sh health
+
+# Test connectivity to manager
+./monitoring-agent-control.sh test-connection
+
+# Show detailed help
+./monitoring-agent-control.sh --help
+```
+
+### Configuration Management
+
+```bash
+# Backup configuration
+./monitoring-agent-control.sh backup
+
+# Restore from backup
+./monitoring-agent-control.sh restore <backup_path>
+
+# Configure firewall
+./monitoring-agent-control.sh configure-firewall <manager_ip>
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. **Agent Naming Issues**
+
+**Problem**: Agent appears with system hostname instead of configured name
+```bash
+# On manager, agent shows as system hostname (e.g., "ubuntu-server")
+# Instead of configured name (e.g., "web-server-01")
+```
+
+**Solution**: Ensure auto-enrollment is disabled and use manual enrollment
+```bash
+# 1. Remove auto-enrolled agent from manager
+sudo docker exec -it wazuh-manager /var/ossec/bin/manage_agents
+# Choose (R)emove, enter agent ID with hostname
+
+# 2. Stop agent and re-enroll with proper configuration
+./monitoring-agent-control.sh stop
+./monitoring-agent-control.sh enroll <MANAGER_IP>
+# Enter the pre-configured client key with correct agent name
+
+# 3. Verify enrollment configuration
+grep -A5 "enrollment" etc/ossec.conf
+# Should show: <enabled>no</enabled>
+```
+
+#### 2. **Enrollment Issues**
+
+**Problem**: IP mismatch in client key
+```bash
+# Client key shows different IP than manager
+001 agent 192.168.1.100 key...  # Key IP
+Manager IP: 172.17.0.2           # Actual manager IP
+```
+
+**Solution**: Our enrollment automatically handles this
+```bash
+# Re-enroll with correct manager IP
+./monitoring-agent-control.sh enroll 172.17.0.2
+# Enter the same client key - IP will be corrected automatically
+```
+
+#### 2. **Connection Failed**
+
+**Check manager accessibility:**
+```bash
+# Test port connectivity
+nc -zv <MANAGER_IP> 1514
+
+# Example with Docker manager
+nc -zv 172.17.0.2 1514
+```
+
+**Check manager status:**
+```bash
+# Docker manager
+sudo docker logs wazuh-manager
+sudo docker exec -it wazuh-manager /var/ossec/bin/wazuh-control status
+
+# Physical manager
+sudo /var/ossec/bin/wazuh-control status
+```
+
+#### 3. **Agent Won't Start**
+
+**Check logs:**
+```bash
+# Agent logs
+./monitoring-agent-control.sh logs 100
+
+# Individual daemon logs
+ls logs/
+cat logs/monitoring-*.log
+```
+
+**Check permissions:**
+```bash
+# Fix permissions
+./monitoring-agent-control.sh setup
+chmod +x bin/*
+```
+
+**Check configuration:**
+```bash
+# Validate config
+./monitoring-agent-control.sh health
+```
+
+#### 4. **Docker Manager Issues**
+
+**Manager not accessible:**
+```bash
+# Check if container is running
+sudo docker ps | grep wazuh
+
+# Check container IP
+sudo docker inspect wazuh-manager | grep IPAddress
+
+# Check port mapping
+sudo docker port wazuh-manager
+
+# Restart container
+sudo docker restart wazuh-manager
+```
+
+### Debug Mode
+
+```bash
+# Enable debug logging
+./monitoring-agent-control.sh -d status
+./monitoring-agent-control.sh -d start
+```
+
+### Log Files
+
+```bash
+# Main agent log
+tail -f logs/monitoring-agent.log
+
+# Individual daemon logs
+tail -f logs/monitoring-agentd.log
+tail -f logs/monitoring-modulesd.log
+tail -f logs/monitoring-logcollector.log
+```
+
+---
+
+## Windows Agent Support
 
 ### Windows Installation
 
 ```powershell
-# 1. Extract to Program Files
-Expand-Archive -Path "monitoring-agent-1.0.0.zip" -DestinationPath "C:\Program Files\Monitoring Agent"
+# Download and extract (PowerShell)
+Invoke-WebRequest -Uri "https://releases.monitoring-solutions.com/monitoring-agent-windows.zip" -OutFile "monitoring-agent.zip"
+Expand-Archive -Path "monitoring-agent.zip" -DestinationPath "C:\monitoring-agent"
+cd C:\monitoring-agent
 
-# 2. Enroll with your Wazuh manager (as Administrator)
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 enroll 192.168.1.100 1514 my-server
-
-# 3. Start the agent
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 start
-
-# 4. Check status
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 status
+# Make executable (if needed)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-## File Structure
-
-```
-/home/anandhu/monitor/
-├── monitoring-agent-control.sh      # Linux control script
-├── monitoring-agent-control.ps1     # Windows control script
-├── security-hardening.sh            # Security configuration script
-├── test-suite.sh                    # Comprehensive test suite
-├── monitoring-agent.service         # Systemd service file
-├── bin/                              # Agent binaries and tools
-│   ├── monitoring-control           # Legacy control script
-│   ├── monitoring-agentd            # Main agent daemon
-│   ├── monitoring-execd             # Execution daemon
-│   ├── monitoring-logcollector      # Log collector
-│   ├── monitoring-modulesd          # Module daemon
-│   └── monitoring-syscheckd         # File integrity monitoring
-├── etc/                              # Configuration files
-│   ├── ossec.conf                   # Main configuration
-│   ├── client.keys                  # Agent authentication keys
-│   └── local_rules.xml              # Local detection rules
-├── logs/                             # Log files
-├── docs/                             # Documentation
-│   ├── INSTALLATION.md              # Installation guide
-│   ├── CONFIGURATION.md             # Configuration guide
-│   └── TROUBLESHOOTING.md           # Troubleshooting guide
-└── var/                              # Runtime data
-```
-
-## Management Commands
-
-### Linux Commands
-
-```bash
-# Service management
-sudo systemctl start monitoring-agent
-sudo systemctl stop monitoring-agent
-sudo systemctl status monitoring-agent
-
-# Direct control
-sudo /home/anandhu/monitor/monitoring-agent-control.sh start
-sudo /home/anandhu/monitor/monitoring-agent-control.sh stop
-sudo /home/anandhu/monitor/monitoring-agent-control.sh restart
-sudo /home/anandhu/monitor/monitoring-agent-control.sh status
-
-# Monitoring and logs
-sudo /home/anandhu/monitor/monitoring-agent-control.sh logs
-sudo /home/anandhu/monitor/monitoring-agent-control.sh logs 100 true  # Follow logs
-sudo /home/anandhu/monitor/monitoring-agent-control.sh health
-
-# Configuration management
-sudo /home/anandhu/monitor/monitoring-agent-control.sh backup
-sudo /home/anandhu/monitor/monitoring-agent-control.sh restore /path/to/backup
-
-# Network configuration
-sudo /home/anandhu/monitor/monitoring-agent-control.sh configure-firewall 192.168.1.100 1514
-```
-
-### Windows Commands
+### Windows Enrollment
 
 ```powershell
-# Service management
-Start-Service MonitoringAgent
-Stop-Service MonitoringAgent
-Get-Service MonitoringAgent
+# PowerShell enrollment (same process as Linux)
+.\monitoring-agent-control.ps1 enroll <MANAGER_IP>
 
-# Direct control
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 start
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 stop
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 restart
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 status
-
-# Monitoring and logs
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 logs
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 logs 100 true
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 health
-
-# Configuration management
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 backup
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 restore "C:\Path\To\Backup"
-
-# Network configuration
-C:\Program Files\Monitoring Agent\monitoring-agent-control.ps1 configure-firewall 192.168.1.100 1514
+# Example
+.\monitoring-agent-control.ps1 enroll 172.17.0.2
 ```
 
-## Security Features
+### Windows Configuration
 
-### Built-in Security Hardening
+The Windows agent uses the same configuration approach:
 
-- **File Permissions**: Proper ownership and permissions for all files
-- **Process Isolation**: Runs with minimal required privileges
-- **Input Validation**: All user inputs are validated and sanitized
-- **Encrypted Communication**: AES encryption for all manager communication
-- **Audit Logging**: Comprehensive logging without sensitive data exposure
+**File Locations:**
+- Configuration: `etc\ossec.conf`
+- Client Keys: `etc\client.keys`
+- Logs: `logs\`
 
-### Security Hardening Script
-
-```bash
-# Run comprehensive security hardening
-sudo /home/anandhu/monitor/security-hardening.sh
-
-# This script configures:
-# - User and group creation
-# - File permissions and ownership
-# - AppArmor/SELinux policies
-# - System resource limits
-# - Log rotation
-# - Kernel security parameters
-# - Firewall rules
-# - Monitoring and alerting
-# - Backup procedures
+**Key Settings (same as Linux):**
+```xml
+<enrollment>
+  <enabled>no</enabled>
+</enrollment>
 ```
 
-## Testing and Validation
+**Important Notes for Windows:**
+- ✅ **Same Manual Naming**: Uses manager-configured names, not Windows hostname
+- ✅ **PowerShell Scripts**: `.ps1` equivalent scripts for Windows
+- ✅ **Same Enrollment Process**: Identical interactive enrollment
+- ✅ **Auto-Enrollment Disabled**: Prevents hostname-based registration
 
-### Comprehensive Test Suite
+### Windows Troubleshooting
 
-```bash
-# Run full test suite
-sudo /home/anandhu/monitor/test-suite.sh
+```powershell
+# Check agent status
+.\monitoring-agent-control.ps1 status
 
-# Tests include:
-# - File existence and permissions
-# - Configuration syntax validation
-# - Script functionality testing
-# - Input validation testing
-# - Security feature verification
-# - Process management testing
-# - Logging functionality
-# - Rebranding completeness
-# - Windows compatibility
-# - Network configuration
-# - Stress testing
-# - Failure recovery
+# Test connectivity
+.\monitoring-agent-control.ps1 test-connection
+
+# View logs
+.\monitoring-agent-control.ps1 logs 50
+
+# Windows firewall configuration
+netsh advfirewall firewall add rule name="Wazuh Agent" dir=out action=allow protocol=TCP remoteport=1514
 ```
 
-### Health Checks
+---
 
-```bash
-# Quick health check
-sudo /home/anandhu/monitor/monitoring-agent-control.sh health
+## Advanced Configuration
 
-# Manual validation
-sudo xmllint --noout /home/anandhu/monitor/etc/ossec.conf
-sudo /home/anandhu/monitor/monitoring-agent-control.sh status
+### File Structure
+
+```
+monitoring-agent/
+├── monitoring-agent-control.sh     # Main control script
+├── .setup_complete                 # Setup marker
+├── bin/                            # Agent binaries
+│   ├── monitoring-agentd          # Main agent daemon
+│   ├── monitoring-modulesd        # Module manager
+│   ├── monitoring-logcollector    # Log collector
+│   └── ...
+├── etc/
+│   ├── ossec.conf                 # Main configuration
+│   ├── client.keys               # Agent authentication
+│   └── ossec.conf.backup.*       # Auto-backups
+├── logs/                          # Log files
+├── var/                           # Runtime data
+│   ├── run/                      # PID files
+│   └── ...
+└── docs/                          # Documentation
 ```
 
-## Compatibility with Wazuh Manager
-
-The Monitoring Agent is fully compatible with existing Wazuh managers. The rebranding only affects the agent-side components and does not change the communication protocol or data formats.
-
-### Connection to Official Wazuh Manager
+### Environment Variables
 
 ```bash
-# 1. Ensure Wazuh manager is running
-docker run -d --name wazuh-manager -p 1514:1514 wazuh/wazuh-manager:latest
+# Wazuh compatibility
+export WAZUH_HOME="/path/to/monitoring-agent"
+export OSSEC_HOME="/path/to/monitoring-agent"
 
-# 2. Enroll the Monitoring Agent
-sudo /home/anandhu/monitor/monitoring-agent-control.sh enroll 192.168.1.100 1514 monitoring-agent-01
-
-# 3. Start the agent
-sudo /home/anandhu/monitor/monitoring-agent-control.sh start
-
-# 4. Verify connection in logs
-sudo tail -f /home/anandhu/monitor/logs/monitoring-agent.log | grep -i connect
+# Debug mode
+export DEBUG=1
 ```
 
-The manager will see the agent as a normal Wazuh agent and all existing rules, dashboards, and integrations will work without modification.
-
-## Documentation
-
-Comprehensive documentation is available in the `docs/` directory:
-
-- **[INSTALLATION.md](docs/INSTALLATION.md)**: Complete installation guide for Linux and Windows
-- **[CONFIGURATION.md](docs/CONFIGURATION.md)**: Detailed configuration options and best practices
-- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**: Common issues and solutions
-
-## Support and Maintenance
-
-### Automated Maintenance
-
-- **Health Monitoring**: Automated health checks every 5 minutes
-- **Log Rotation**: Daily log rotation with 30-day retention
-- **Configuration Backup**: Daily automated backups
-- **Resource Monitoring**: CPU, memory, and disk usage tracking
-
-### Manual Maintenance
+### Systemd Service (Optional)
 
 ```bash
-# Daily health check
-sudo /home/anandhu/monitor/monitoring-agent-control.sh health
+# For system-wide installation (requires root)
+sudo ./monitoring-agent-control.sh setup
 
-# Weekly log cleanup
-sudo find /home/anandhu/monitor/logs -name "*.log.*" -mtime +7 -delete
-
-# Monthly configuration backup
-sudo /home/anandhu/monitor/monitoring-agent-control.sh backup
-```
-
-## Deployment Scenarios
-
-### Enterprise Deployment
-
-```bash
-# 1. Mass deployment script
-#!/bin/bash
-MANAGER_IP="10.0.1.100"
-AGENT_NAME="$(hostname)-monitoring"
-
-# Download and install
-wget https://packages.monitoring-solutions.com/monitoring-agent-latest.tar.gz
-sudo tar -xzf monitoring-agent-latest.tar.gz -C /opt/
-sudo ln -sf /opt/monitoring-agent /home/anandhu/monitor
-
-# Security hardening
-sudo /home/anandhu/monitor/security-hardening.sh
-
-# Enrollment
-sudo /home/anandhu/monitor/monitoring-agent-control.sh enroll "$MANAGER_IP" 1514 "$AGENT_NAME"
-
-# Service installation
-sudo cp /home/anandhu/monitor/monitoring-agent.service /etc/systemd/system/
-sudo systemctl daemon-reload
+# Enable service
 sudo systemctl enable monitoring-agent
 sudo systemctl start monitoring-agent
 ```
 
-### Cloud Deployment
+### Firewall Configuration
 
-```yaml
-# Docker Compose example
-version: '3.8'
-services:
-  monitoring-agent:
-    image: monitoring-solutions/agent:1.0.0
-    environment:
-      - MANAGER_IP=wazuh-manager.example.com
-      - MANAGER_PORT=1514
-      - AGENT_NAME=docker-agent
-    volumes:
-      - agent-config:/opt/monitoring-agent/etc
-      - agent-logs:/opt/monitoring-agent/logs
-    restart: unless-stopped
+```bash
+# Automatic firewall setup
+./monitoring-agent-control.sh configure-firewall <MANAGER_IP> [PORT]
 
-volumes:
-  agent-config:
-  agent-logs:
+# Manual iptables rule
+sudo iptables -A OUTPUT -p tcp -d <MANAGER_IP> --dport 1514 -j ACCEPT
+
+# Manual UFW rule
+sudo ufw allow out 1514/tcp
 ```
-
-## Performance Characteristics
-
-### System Requirements
-
-**Minimum Requirements:**
-- CPU: 1 core
-- RAM: 512MB
-- Disk: 1GB free space
-- Network: Outbound TCP/1514
-
-**Recommended Requirements:**
-- CPU: 2 cores
-- RAM: 1GB
-- Disk: 5GB free space
-- Network: Reliable connection to manager
-
-### Performance Metrics
-
-- **CPU Usage**: <5% under normal load
-- **Memory Usage**: <256MB typical
-- **Network Usage**: <10KB/s average
-- **Disk I/O**: Minimal impact with proper configuration
-
-## Scalability
-
-The Monitoring Agent is designed for large-scale deployment:
-
-- **Agent Capacity**: Single manager can handle 15,000+ agents
-- **Event Processing**: Up to 1,000 events/second per agent
-- **File Monitoring**: Efficient real-time monitoring with inotify
-- **Resource Scaling**: Automatically adjusts based on system resources
-
-## Compliance and Standards
-
-- **SOC 2 Type II**: Comprehensive security controls
-- **ISO 27001**: Information security management
-- **PCI DSS**: Payment card industry compliance
-- **GDPR**: Data protection and privacy
-- **HIPAA**: Healthcare data protection
-
-## Version Information
-
-- **Version**: 1.0.0
-- **Based on**: Wazuh 4.12.0
-- **Release Date**: September 2025
-- **License**: Commercial License
-- **Support**: Professional support available
-
-## Contact Information
-
-- **Website**: https://www.monitoring-solutions.com
-- **Documentation**: https://docs.monitoring-solutions.com
-- **Support**: support@monitoring-solutions.com
-- **Phone**: 1-800-MONITOR (1-800-666-4867)
-- **Emergency**: +1-800-MONITOR-1
 
 ---
 
-*Copyright © 2025 Monitoring Solutions Inc. All rights reserved.*
+## Support and Documentation
+
+### Getting Help
+
+```bash
+# Show all commands
+./monitoring-agent-control.sh --help
+
+# Version information
+./monitoring-agent-control.sh --version
+
+# Health check
+./monitoring-agent-control.sh health
+```
+
+### Resources
+
+- **Documentation**: See `docs/` directory
+- **Logs**: Check `logs/` directory for troubleshooting
+- **Backups**: Stored in `backup/` directory
+- **Support**: support@monitoring-solutions.com
+
+### Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `enroll <ip>` | Interactive enrollment |
+| `start` | Start agent (auto-setup) |
+| `stop` | Stop agent |
+| `status` | Show status |
+| `test-connection` | Test manager connectivity |
+| `logs [n]` | Show logs |
+| `health` | Health check |
+| `backup` | Backup config |
+
+---
+
+*Last updated: September 15, 2025*  
+*Version: 1.0.0*  
+*Copyright © 2025 Monitoring Solutions Inc.*
