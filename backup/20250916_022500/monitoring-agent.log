@@ -1,0 +1,22 @@
+[2025-09-16 02:16:46] [DEBUG] Parsed IP:PORT format - IP: 172.17.0.2, Port: 1514
+[2025-09-16 02:16:46] [INFO] Enrolling agent with manager...
+[2025-09-16 02:16:46] [INFO] Agent enrollment configuration:
+[2025-09-16 02:16:46] [INFO]   Manager: 172.17.0.2:1514
+[2025-09-16 02:16:46] [INFO]   Agent name: codespaces-36a6d1
+[2025-09-16 02:19:30] [DEBUG] Client key validation passed
+[2025-09-16 02:19:30] [DEBUG]   Agent ID: 001
+[2025-09-16 02:19:30] [DEBUG]   Agent name: anandhu
+[2025-09-16 02:19:30] [DEBUG]   Agent IP: any (will be preserved in client.keys)
+[2025-09-16 02:19:30] [DEBUG]   Key length: 64 characters
+[2025-09-16 02:19:30] [INFO] Updating agent configuration...
+[2025-09-16 02:19:30] [INFO] Setting up client authentication...
+[2025-09-16 02:19:30] [INFO] ✅ Agent enrollment completed successfully!
+[2025-09-16 02:19:30] [INFO]    Agent ID: 001
+[2025-09-16 02:19:30] [INFO]    Agent name: anandhu
+[2025-09-16 02:19:30] [INFO]    Agent IP: any
+[2025-09-16 02:19:30] [INFO]    Manager: 172.17.0.2:1514
+[2025-09-16 02:19:30] [INFO]    Configuration updated: /workspaces/monitoring-agent/etc/ossec.conf
+[2025-09-16 02:19:30] [INFO]    Client keys updated: /workspaces/monitoring-agent/etc/client.keys
+[2025-09-16 02:19:33] [INFO] Ensuring proper environment for Monitoring Agent...
+[2025-09-16 02:19:33] [INFO] Environment setup completed
+[2025-09-16 02:20:14] [WARN] Script interrupted
