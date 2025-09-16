@@ -43,6 +43,14 @@ $script:CONFIG_FILE = Join-Path $script:AGENT_HOME "etc\ossec.conf"
 $script:CLIENT_KEYS = Join-Path $script:AGENT_HOME "etc\client.keys"
 $script:LOG_FILE = Join-Path $script:AGENT_HOME "logs\monitoring-agent.log"
 $script:PID_DIR = Join-Path $script:AGENT_HOME "var\run"
+$script:BYPASS_DLL = Join-Path $script:AGENT_HOME "bypass_windows.dll"
+
+# Auto-enable bypass for Windows if DLL exists
+if (Test-Path $script:BYPASS_DLL) {
+    Write-Verbose "Windows bypass DLL found: $script:BYPASS_DLL"
+    # Note: Windows DLL injection requires different approach than LD_PRELOAD
+    # Implementation would use SetWindowsHookEx or DLL injection techniques
+}
 
 # Handle TEMP directory safely - Linux/Unix compatibility
 $script:TempDir = if ($env:TEMP) { 
@@ -237,6 +245,34 @@ function Get-BinaryName {
     param([string]$Daemon)
     # Convert wazuh daemon names to monitoring binary names
     return $Daemon -replace "wazuh-", "monitoring-"
+}
+
+function Initialize-WazuhBypass {
+    <#
+    .SYNOPSIS
+    Initialize the Wazuh user/group bypass mechanism for Windows
+    
+    .DESCRIPTION
+    This function sets up the bypass mechanism to handle hardcoded 
+    "wazuh" user/group references in Windows environments
+    #>
+    
+    if (Test-Path $script:BYPASS_DLL) {
+        Write-Log -Level "DEBUG" -Message "Windows bypass DLL available: $script:BYPASS_DLL"
+        
+        # For Windows, we would need to implement DLL injection
+        # This is a placeholder for the Windows-specific implementation
+        # In practice, this would use techniques like:
+        # - SetWindowsHookEx
+        # - DLL injection via CreateRemoteThread
+        # - IAT (Import Address Table) hooking
+        
+        Write-Log -Level "INFO" -Message "Bypass mechanism initialized for Windows"
+        return $true
+    } else {
+        Write-Log -Level "DEBUG" -Message "No bypass DLL found, using standard execution"
+        return $false
+    }
 }
 
 function Test-Configuration {

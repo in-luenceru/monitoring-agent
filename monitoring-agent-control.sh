@@ -5,7 +5,7 @@
 # Copyright (C) 2025, Monitoring Solutions Inc.
 # Version: 1.0.0
 
-DAEMONS="wazuh-modulesd wazuh-logcollector wazuh-syscheckd wazuh-agentd wazuh-execd"
+DAEMONS=" wazuh-agentd wazuh-execd wazuh-modulesd wazuh-logcollector wazuh-syscheckd"
 
 # Reverse order of daemons (for start sequence)
 SDAEMONS=$(echo $DAEMONS | awk '{ for (i=NF; i>1; i--) printf("%s ",$i); print $1; }')
@@ -25,14 +25,20 @@ TYPE="agent"
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly AGENT_HOME="${SCRIPT_DIR}"
-# Use root user and group for all operations
-readonly AGENT_USER="root"
-readonly AGENT_GROUP="root"
+# Use monitoring user and group for all operations
+readonly AGENT_USER="monitoring"
+readonly AGENT_GROUP="monitoring"
 readonly CONFIG_FILE="${AGENT_HOME}/etc/ossec.conf"
 readonly CLIENT_KEYS="${AGENT_HOME}/etc/client.keys"
 readonly LOG_FILE="${AGENT_HOME}/logs/monitoring-agent.log"
 readonly PID_DIR="${AGENT_HOME}/var/run"
-readonly LOCK_FILE="/tmp/monitoring-agent-root"
+readonly LOCK_FILE="/tmp/monitoring-agent-monitoring.lock"
+readonly BYPASS_LIB="${AGENT_HOME}/bypass.so"
+
+# Auto-enable bypass if library exists
+if [[ -f "$BYPASS_LIB" && -z "${LD_PRELOAD:-}" ]]; then
+    export LD_PRELOAD="$BYPASS_LIB"
+fi
 
 # Process names
 readonly PROCESSES="monitoring-modulesd monitoring-logcollector monitoring-syscheckd monitoring-agentd monitoring-execd"
@@ -1166,7 +1172,12 @@ main() {
     # Always ensure script runs with root privileges
     if [[ $EUID -ne 0 ]]; then
         echo "Monitoring Agent requires elevated privileges. Restarting with sudo..."
-        exec sudo "$0" "$@"
+        # Preserve LD_PRELOAD environment variable if set
+        if [[ -n "${LD_PRELOAD:-}" ]]; then
+            exec sudo LD_PRELOAD="$LD_PRELOAD" "$0" "$@"
+        else
+            exec sudo "$0" "$@"
+        fi
     fi
 
     arg=$2
