@@ -1,0 +1,12 @@
+2025/09/16 02:19:33 wazuh-execd: INFO: Started (pid: 27281).
+2025/09/16 02:19:34 wazuh-agentd: ERROR: (1103): Could not open file 'queue/sockets/.agent_info' due to [(2)-(No such file or directory)].
+2025/09/16 02:19:34 wazuh-agentd: ERROR: (1103): Could not open file 'queue/sockets/.agent_info' due to [(2)-(No such file or directory)].
+2025/09/16 02:19:34 wazuh-agentd: INFO: (1410): Reading authentication keys file.
+2025/09/16 02:19:34 wazuh-agentd: INFO: Using notify time: 10 and max time to reconnect: 60
+2025/09/16 02:19:34 wazuh-agentd: INFO: Version detected -> Linux |codespaces-36a6d1 |6.8.0-1030-azure |#35~22.04.1-Ubuntu SMP Mon May 26 18:08:30 UTC 2025 |x86_64 [Ubuntu|ubuntu: 24.04.2 LTS (Noble Numbat)] - Wazuh v4.12.0
+2025/09/16 02:19:34 wazuh-agentd: INFO: Started (pid: 27319).
+2025/09/16 02:19:34 wazuh-agentd: ERROR: Unable to open agent file. errno: 2
+2025/09/16 02:19:34 wazuh-agentd: CRITICAL: (1103): Could not open file 'queue/rids/001' due to [(2)-(No such file or directory)].
+2025/09/16 02:20:23 wazuh-agentd: ERROR: (1103): Could not open file 'queue/sockets/.agent_info' due to [(2)-(No such file or directory)].
+2025/09/16 02:20:23 wazuh-agentd: ERROR: (1103): Could not open file 'queue/sockets/.agent_info' due to [(2)-(No such file or directory)].
+2025/09/16 02:20:23 wazuh-syscheckd: CRITICAL: (1203): Invalid user '' or group 'wazuh' given: Success (0)

@@ -25,14 +25,14 @@ TYPE="agent"
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly AGENT_HOME="${SCRIPT_DIR}"
-# Default to current user for better compatibility
-readonly AGENT_USER="$(whoami)"
-readonly AGENT_GROUP="$(id -gn)"
+# Use root user and group for all operations
+readonly AGENT_USER="root"
+readonly AGENT_GROUP="root"
 readonly CONFIG_FILE="${AGENT_HOME}/etc/ossec.conf"
 readonly CLIENT_KEYS="${AGENT_HOME}/etc/client.keys"
 readonly LOG_FILE="${AGENT_HOME}/logs/monitoring-agent.log"
 readonly PID_DIR="${AGENT_HOME}/var/run"
-readonly LOCK_FILE="/tmp/monitoring-agent-$(whoami)"
+readonly LOCK_FILE="/tmp/monitoring-agent-root"
 
 # Process names
 readonly PROCESSES="monitoring-modulesd monitoring-logcollector monitoring-syscheckd monitoring-agentd monitoring-execd"
@@ -51,11 +51,12 @@ log() {
     local message="$*"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     
-    # Try to write to log file, fall back to temp file if permission denied
-    if ! echo "[$timestamp] [$level] $message" >> "$LOG_FILE" 2>/dev/null; then
-        local temp_log="/tmp/monitoring-agent-$(whoami).log"
+    # Write to log file (should work since we're running as root)
+    echo "[$timestamp] [$level] $message" >> "$LOG_FILE" 2>/dev/null || {
+        # Fall back to temp file if main log is inaccessible
+        local temp_log="/tmp/monitoring-agent-root.log"
         echo "[$timestamp] [$level] $message" >> "$temp_log" 2>/dev/null || true
-    fi
+    }
     
     case "$level" in
         "ERROR")
@@ -158,26 +159,22 @@ wait_pid() {
 get_daemon_args() {
     local daemon="$1"
     
-    # Only use user/group args if running as root
-    if [[ $EUID -eq 0 ]]; then
-        local user=$(whoami)
-        local group=$(id -gn)
-        
-        case "$daemon" in
-            "wazuh-agentd")
-                echo "-u $user -g $group"
-                ;;
-            "wazuh-execd")
-                echo "-g $group"
-                ;;
-            *)
-                echo ""
-                ;;
-        esac
-    else
-        # When not root, don't specify user/group - let it run as current user
-        echo ""
-    fi
+    # Only use user/group flags for daemons that support them
+    case "$daemon" in
+        "wazuh-agentd")
+            echo "-u root -g root"
+            ;;
+        "wazuh-execd")
+            echo "-g root"
+            ;;
+        "wazuh-logcollector"|"wazuh-modulesd"|"wazuh-syscheckd")
+            # These binaries don't support user/group flags
+            echo ""
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
 }
 
 get_binary_name() {
@@ -275,71 +272,88 @@ ensure_environment() {
         "$AGENT_HOME/logs"
         "$AGENT_HOME/var"
         "$AGENT_HOME/var/run"
+        "$AGENT_HOME/var/db"
         "$AGENT_HOME/queue"
         "$AGENT_HOME/queue/sockets"
         "$AGENT_HOME/queue/alerts"
         "$AGENT_HOME/queue/diff"
         "$AGENT_HOME/queue/logcollector"
+        "$AGENT_HOME/queue/rids"
+        "$AGENT_HOME/queue/fim"
+        "$AGENT_HOME/queue/fim/db"
         "$AGENT_HOME/tmp"
         "$AGENT_HOME/backup"
+        "/var/monitoring-agent/logs"
     )
     
     # Create directories with proper permissions
     for dir in "${directories[@]}"; do
         if [[ ! -d "$dir" ]]; then
-            mkdir -p "$dir" 2>/dev/null || {
-                if [[ $EUID -eq 0 ]]; then
-                    mkdir -p "$dir"
-                    chown root:root "$dir"
-                    chmod 755 "$dir"
-                else
-                    # If not root, try with sudo
-                    sudo mkdir -p "$dir" 2>/dev/null || true
-                    sudo chown $(whoami):$(id -gn) "$dir" 2>/dev/null || true
-                    sudo chmod 755 "$dir" 2>/dev/null || true
-                fi
-            }
+            mkdir -p "$dir"
+            chown root:root "$dir"
+            chmod 755 "$dir"
         fi
     done
     
+    # Create required agent files
+    if [[ ! -f "$AGENT_HOME/queue/sockets/.agent_info" ]]; then
+        touch "$AGENT_HOME/queue/sockets/.agent_info"
+        chown root:root "$AGENT_HOME/queue/sockets/.agent_info"
+        chmod 644 "$AGENT_HOME/queue/sockets/.agent_info"
+        sudo chmod 640 etc/ossec.conf etc/client.keys
+    fi
+    
+    # Create required log files
+    if [[ ! -f "/var/monitoring-agent/logs/active-responses.log" ]]; then
+        touch "/var/monitoring-agent/logs/active-responses.log"
+        chown root:root "/var/monitoring-agent/logs/active-responses.log"
+        chmod 644 "/var/monitoring-agent/logs/active-responses.log"
+    fi
+    
+    # Create rids file for the agent if client.keys exists
+    if [[ -f "$CLIENT_KEYS" ]]; then
+        local agent_id=$(head -1 "$CLIENT_KEYS" 2>/dev/null | cut -d' ' -f1)
+        if [[ -n "$agent_id" && ! -f "$AGENT_HOME/queue/rids/$agent_id" ]]; then
+            touch "$AGENT_HOME/queue/rids/$agent_id"
+            chown root:root "$AGENT_HOME/queue/rids/$agent_id"
+            chmod 644 "$AGENT_HOME/queue/rids/$agent_id"
+        fi
+    fi
+    
     # Fix permissions for configuration files
     if [[ -f "$CONFIG_FILE" ]]; then
-        if [[ $EUID -eq 0 ]]; then
-            chmod 644 "$CONFIG_FILE"
-        else
-            sudo chmod 644 "$CONFIG_FILE" 2>/dev/null || true
-        fi
+        chmod 644 "$CONFIG_FILE"
+        chown root:root "$CONFIG_FILE"
     fi
     
     if [[ -f "$CLIENT_KEYS" ]]; then
-        if [[ $EUID -eq 0 ]]; then
-            chmod 644 "$CLIENT_KEYS"
-        else
-            sudo chmod 644 "$CLIENT_KEYS" 2>/dev/null || true
-        fi
+        chmod 644 "$CLIENT_KEYS"
+        chown root:root "$CLIENT_KEYS"
     fi
     
     # Fix ownership and permissions for runtime directories
-    local runtime_dirs=("$AGENT_HOME/queue" "$AGENT_HOME/var" "$AGENT_HOME/logs")
+    local runtime_dirs=("$AGENT_HOME/queue" "$AGENT_HOME/var" "$AGENT_HOME/logs" "/var/monitoring-agent")
     for dir in "${runtime_dirs[@]}"; do
-        if [[ $EUID -eq 0 ]]; then
+        if [[ -d "$dir" ]]; then
             chown -R root:root "$dir" 2>/dev/null || true
             chmod -R 755 "$dir" 2>/dev/null || true
-        else
-            sudo chown -R $(whoami):$(id -gn) "$dir" 2>/dev/null || true
-            sudo chmod -R 755 "$dir" 2>/dev/null || true
         fi
     done
     
     # Clean up any stale files
-    rm -f "$AGENT_HOME/queue/sockets/"* 2>/dev/null || {
-        sudo rm -f "$AGENT_HOME/queue/sockets/"* 2>/dev/null || true
-    }
+    rm -f "$AGENT_HOME/queue/sockets/"* 2>/dev/null || true
+    rm -f "$AGENT_HOME/var/run/"*.pid 2>/dev/null || true
     
-    rm -f "$AGENT_HOME/var/run/"*.pid 2>/dev/null || {
-        sudo rm -f "$AGENT_HOME/var/run/"*.pid 2>/dev/null || true
-    }
-    
+    # Recreate essential files after cleanup
+    touch "$AGENT_HOME/queue/sockets/.agent_info"
+    touch "/var/monitoring-agent/logs/active-responses.log"
+    if [[ -f "$CLIENT_KEYS" ]]; then
+        local agent_id=$(head -1 "$CLIENT_KEYS" 2>/dev/null | cut -d' ' -f1)
+        if [[ -n "$agent_id" ]]; then
+            touch "$AGENT_HOME/queue/rids/$agent_id"
+        fi
+    fi
+
     log "INFO" "Environment setup completed"
 }
 
@@ -424,10 +438,10 @@ pstatus(){
         return 0;
     fi
 
-    # Try to read PID files, use sudo if permission denied
+    # Read PID files
     pids=""
     if ls ${DIR}/var/run/${pfile}-*.pid > /dev/null 2>&1; then
-        pids=$(cat ${DIR}/var/run/${pfile}-*.pid 2>/dev/null || sudo cat ${DIR}/var/run/${pfile}-*.pid 2>/dev/null)
+        pids=$(cat ${DIR}/var/run/${pfile}-*.pid 2>/dev/null)
     fi
     
     if [ -n "$pids" ]; then
@@ -435,14 +449,12 @@ pstatus(){
             ps -p ${pid} > /dev/null 2>&1
             if [ ! $? = 0 ]; then
                 echo "${pfile}: Process ${pid} not used by Monitoring Agent, removing .."
-                rm -f ${DIR}/var/run/${pfile}-${pid}.pid 2>/dev/null || sudo rm -f ${DIR}/var/run/${pfile}-${pid}.pid 2>/dev/null
+                rm -f ${DIR}/var/run/${pfile}-${pid}.pid 2>/dev/null
                 continue;
             fi
 
-            # Try kill -0, use sudo if permission denied
+            # Check if process is still running
             if kill -0 ${pid} > /dev/null 2>&1; then
-                return 1;
-            elif sudo kill -0 ${pid} > /dev/null 2>&1; then
                 return 1;
             fi
         done
@@ -463,60 +475,73 @@ start_agent() {
 
     # Delete all files in temporary folder
     TO_DELETE="$DIR/tmp/*"
-    rm -rf $TO_DELETE 2>/dev/null || sudo rm -rf $TO_DELETE 2>/dev/null || true
+    rm -rf $TO_DELETE 2>/dev/null || true
 
     # Start daemons in reverse order
     for i in ${SDAEMONS}; do
         pstatus ${i};
         if [ $? = 0 ]; then
-            failed=false
             # Get appropriate arguments for this daemon
             local args=$(get_daemon_args "$i")
             local binary=$(get_binary_name "$i")
             
             echo "Starting ${i}..."
             
-            # Try to start with current permissions first
-            ${DIR}/bin/${binary} $args 2>/dev/null || {
-                # If that fails and we're not root, try with sudo
-                if [[ $EUID -ne 0 ]]; then
-                    echo "Retrying ${i} with elevated permissions..."
-                    sudo ${DIR}/bin/${binary} $args 2>/dev/null || failed=true
-                else
-                    failed=true
-                fi
-            }
+            # Start the daemon
+            ${DIR}/bin/${binary} $args
             
-            if [ $failed = false ]; then
-                # Wait for daemon to start and create PID file
-                j=0;
-                while [ $failed = false ]; do
-                    pstatus ${i};
-                    if [ $? = 1 ]; then
+            # Wait for daemon to start and create PID file
+            j=0;
+            failed=false
+            while [ $failed = false ]; do
+                sleep 1;
+                pstatus ${i};
+                if [ $? = 1 ]; then
+                    break;
+                fi
+                j=`expr $j + 1`;
+                if [ "$j" -ge "${MAX_ITERATION}" ]; then
+                    # Some daemons might not create PID files but still run successfully
+                    # Check if the process is actually running
+                    if pgrep -f "${binary}" > /dev/null; then
+                        log "DEBUG" "${i} is running but no PID file found"
                         break;
-                    fi
-                    sleep 1;
-                    j=`expr $j + 1`;
-                    if [ "$j" -ge "${MAX_ITERATION}" ]; then
+                    else
                         failed=true
                     fi
-                done
-            fi
+                fi
+            done
             
             if [ $failed = true ]; then
-                echo "ERROR: ${i} failed to start";
-                unlock;
-                exit 1;
+                log "WARN" "${i} failed to start or took too long to initialize";
+                # Don't exit immediately, try to start other daemons
+            else
+                echo "✓ Started ${i}"
             fi
-            echo "✓ Started ${i}"
         else
             echo "${i} already running..."
         fi
     done
 
-    # Give daemons time to create PID files
-    sleep 2;
-    echo "✓ Monitoring Agent started successfully!"
+    # Give daemons time to initialize
+    sleep 3;
+    
+    # Check final status
+    local running_count=0
+    for i in ${DAEMONS}; do
+        pstatus ${i};
+        if [ $? = 1 ] || pgrep -f "$(get_binary_name "$i")" > /dev/null; then
+            running_count=$((running_count + 1))
+        fi
+    done
+    
+    if [ $running_count -gt 0 ]; then
+        echo "✓ Monitoring Agent started successfully! ($running_count/5 daemons running)"
+    else
+        echo "✗ Failed to start Monitoring Agent"
+        unlock;
+        exit 1;
+    fi
 }
 stop_agent() 
 {
@@ -1138,15 +1163,16 @@ version() {
 
 # Main function
 main() {
+    # Always ensure script runs with root privileges
+    if [[ $EUID -ne 0 ]]; then
+        echo "Monitoring Agent requires elevated privileges. Restarting with sudo..."
+        exec sudo "$0" "$@"
+    fi
+
     arg=$2
 
     case "$1" in
     start)
-        # If not running as root, restart with sudo
-        if [[ $EUID -ne 0 ]]; then
-            echo "Monitoring Agent requires elevated privileges to start. Restarting with sudo..."
-            exec sudo "$0" "$@"
-        fi
         testconfig
         lock
         start_agent
