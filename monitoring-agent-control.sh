@@ -5,7 +5,7 @@
 # Copyright (C) 2025, Monitoring Solutions Inc.
 # Version: 1.0.0
 
-DAEMONS=" wazuh-agentd wazuh-execd wazuh-modulesd wazuh-logcollector wazuh-syscheckd"
+DAEMONS=" monitoring-agentd monitoring-execd monitoring-modulesd monitoring-logcollector monitoring-syscheckd"
 
 # Reverse order of daemons (for start sequence)
 SDAEMONS=$(echo $DAEMONS | awk '{ for (i=NF; i>1; i--) printf("%s ",$i); print $1; }')
@@ -49,6 +49,10 @@ readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
+
+# Stop timeout (seconds) and sleep interval for waiting on processes
+readonly STOP_TIMEOUT=10
+readonly STOP_SLEEP_INTERVAL=0.1
 
 # Logging function
 log() {
@@ -144,18 +148,25 @@ unlock()
 }
 
 wait_pid() {
-    wp_counter=1
+    # wait_pid <pid> [timeout_seconds]
+    local pid="$1"
+    local timeout_seconds="${2:-$STOP_TIMEOUT}"
+    local interval="${STOP_SLEEP_INTERVAL}"
 
-    while kill -0 $1 2> /dev/null
+    # Calculate max iterations (integer)
+    local max_iter=$(awk "BEGIN { printf( int(($timeout_seconds) / ($interval)) ) }")
+    local wp_counter=0
+
+    while kill -0 "$pid" 2> /dev/null
     do
-        if [ "$wp_counter" = "$MAX_KILL_TRIES" ]
+        if [ "$wp_counter" -ge "$max_iter" ]
         then
             return 1
         else
             # sleep doesn't work in AIX
             # read doesn't work in FreeBSD
-            sleep 0.1 > /dev/null 2>&1 || read -t 0.1 > /dev/null 2>&1
-            wp_counter=`expr $wp_counter + 1`
+            sleep "$interval" > /dev/null 2>&1 || read -t "$interval" > /dev/null 2>&1
+            wp_counter=$((wp_counter + 1))
         fi
     done
 
@@ -167,13 +178,13 @@ get_daemon_args() {
     
     # Only use user/group flags for daemons that support them
     case "$daemon" in
-        "wazuh-agentd")
+        "monitoring-agentd")
             echo "-u root -g root"
             ;;
-        "wazuh-execd")
+        "monitoring-execd")
             echo "-g root"
             ;;
-        "wazuh-logcollector"|"wazuh-modulesd"|"wazuh-syscheckd")
+        "monitoring-logcollector"|"monitoring-modulesd"|"monitoring-syscheckd")
             # These binaries don't support user/group flags
             echo ""
             ;;
@@ -185,8 +196,33 @@ get_daemon_args() {
 
 get_binary_name() {
     local daemon="$1"
-    # Convert wazuh daemon names to monitoring binary names
-    echo "$daemon" | sed 's/wazuh-/monitoring-/'
+    # Convert monitoring daemon names to monitoring binary names (already matching)
+    echo "$daemon"
+}
+
+get_pid_name() {
+    local daemon="$1"
+    # Convert monitoring daemon names to wazuh PID file names (since binaries still use wazuh internally)
+    case "$daemon" in
+        "monitoring-agentd")
+            echo "wazuh-agentd"
+            ;;
+        "monitoring-execd")
+            echo "wazuh-execd"
+            ;;
+        "monitoring-logcollector")
+            echo "wazuh-logcollector"
+            ;;
+        "monitoring-modulesd")
+            echo "wazuh-modulesd"
+            ;;
+        "monitoring-syscheckd")
+            echo "wazuh-syscheckd"
+            ;;
+        *)
+            echo "$daemon"
+            ;;
+    esac
 }
 
 testconfig()
@@ -366,15 +402,16 @@ ensure_environment() {
 # Process management functions
 is_process_running() {
     local process_name="$1"
-    local pid_file="${PID_DIR}/${process_name}.pid"
+    local pid_name=$(get_pid_name "$process_name")
     
-    if [[ -f "$pid_file" ]]; then
-        local pid=$(cat "$pid_file" 2>/dev/null)
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-            return 0
-        else
-            rm -f "$pid_file"
-        fi
+    # Look for PID files with the actual daemon PID naming convention
+    if ls "${PID_DIR}/${pid_name}"-*.pid > /dev/null 2>&1; then
+        local pids=$(cat "${PID_DIR}/${pid_name}"-*.pid 2>/dev/null)
+        for pid in $pids; do
+            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                return 0
+            fi
+        done
     fi
     
     # Fallback to process name check
@@ -383,16 +420,17 @@ is_process_running() {
 
 get_process_pid() {
     local process_name="$1"
-    local pid_file="${PID_DIR}/${process_name}.pid"
+    local pid_name=$(get_pid_name "$process_name")
     
-    if [[ -f "$pid_file" ]]; then
-        local pid=$(cat "$pid_file" 2>/dev/null)
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-            echo "$pid"
-            return
-        else
-            rm -f "$pid_file"
-        fi
+    # Look for PID files with the actual daemon PID naming convention
+    if ls "${PID_DIR}/${pid_name}"-*.pid > /dev/null 2>&1; then
+        local pids=$(cat "${PID_DIR}/${pid_name}"-*.pid 2>/dev/null)
+        for pid in $pids; do
+            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                echo "$pid"
+                return
+            fi
+        done
     fi
     
     # Fallback to process name check
@@ -444,10 +482,13 @@ pstatus(){
         return 0;
     fi
 
+    # Convert monitoring daemon name to actual PID file name
+    local pid_name=$(get_pid_name "$pfile")
+
     # Read PID files
     pids=""
-    if ls ${DIR}/var/run/${pfile}-*.pid > /dev/null 2>&1; then
-        pids=$(cat ${DIR}/var/run/${pfile}-*.pid 2>/dev/null)
+    if ls ${DIR}/var/run/${pid_name}-*.pid > /dev/null 2>&1; then
+        pids=$(cat ${DIR}/var/run/${pid_name}-*.pid 2>/dev/null)
     fi
     
     if [ -n "$pids" ]; then
@@ -455,7 +496,7 @@ pstatus(){
             ps -p ${pid} > /dev/null 2>&1
             if [ ! $? = 0 ]; then
                 echo "${pfile}: Process ${pid} not used by Monitoring Agent, removing .."
-                rm -f ${DIR}/var/run/${pfile}-${pid}.pid 2>/dev/null
+                rm -f ${DIR}/var/run/${pid_name}-${pid}.pid 2>/dev/null
                 continue;
             fi
 
@@ -557,15 +598,19 @@ stop_agent()
         if [ $? = 1 ]; then
             echo "Killing ${i}... ";
 
+            # Get the correct PID file name
+            local pid_name=$(get_pid_name "$i")
+            
             # Get PID with sudo fallback
-            pid=$(cat ${DIR}/var/run/${i}-*.pid 2>/dev/null || sudo cat ${DIR}/var/run/${i}-*.pid 2>/dev/null)
+            pid=$(cat ${DIR}/var/run/${pid_name}-*.pid 2>/dev/null || sudo cat ${DIR}/var/run/${pid_name}-*.pid 2>/dev/null)
             
             if [ -n "$pid" ]; then
                 # Try to kill with sudo if needed
                 if kill $pid 2>/dev/null || sudo kill $pid 2>/dev/null; then
-                    if ! wait_pid $pid; then
-                        echo "Process ${i} couldn't be terminated. It will be killed.";
-                        kill -9 $pid 2>/dev/null || sudo kill -9 $pid 2>/dev/null
+                    # Wait a small bounded time for the process to exit
+                    if ! wait_pid "$pid" "$STOP_TIMEOUT"; then
+                        echo "Process ${i} couldn't be terminated gracefully. Force killing...";
+                        kill -9 "$pid" 2>/dev/null || sudo kill -9 "$pid" 2>/dev/null
                     fi
                 fi
             fi
@@ -573,7 +618,9 @@ stop_agent()
             echo "${i} not running...";
         fi
 
-        rm -f ${DIR}/var/run/${i}-*.pid 2>/dev/null || sudo rm -f ${DIR}/var/run/${i}-*.pid 2>/dev/null
+        # Clean up PID files using correct naming
+        local pid_name=$(get_pid_name "$i")
+        rm -f ${DIR}/var/run/${pid_name}-*.pid 2>/dev/null || sudo rm -f ${DIR}/var/run/${pid_name}-*.pid 2>/dev/null
      done
 
     echo "Monitoring Agent $VERSION Stopped"

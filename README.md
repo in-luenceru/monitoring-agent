@@ -6,7 +6,7 @@
 - [Quick Start](#quick-start)
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
-- [Wazuh Manager Setup with Docker](#wazuh-manager-setup-with-docker)
+- [Monitoring Manager Setup with Docker](#monitoring-manager-setup-with-docker)
 - [Agent Enrollment](#agent-enrollment)
 - [Agent Management](#agent-management)
 - [Troubleshooting](#troubleshooting)
@@ -22,7 +22,7 @@ The **Monitoring Agent** is a professional security monitoring solution that pro
 - 🚀 **Auto-Setup**: Automatic initialization and configuration
 - 🔐 **Interactive Enrollment**: Guided enrollment with validation
 - 📝 **Auto-Configuration**: Configuration files updated automatically
-- 🐳 **Docker Ready**: Works seamlessly with containerized Wazuh managers
+- 🐳 **Docker Ready**: Works seamlessly with containerized Monitoring managers
 
 ---
 
@@ -107,7 +107,7 @@ cd monitoring-agent
 
 ---
 
-## Wazuh Manager Setup with Docker
+## Monitoring Manager Setup with Docker
 
 ### Prerequisites
 ```bash
@@ -123,22 +123,22 @@ sudo systemctl enable docker
 ### Method 1: Single Node Docker Setup
 
 ```bash
-# Create Wazuh directory
-mkdir wazuh-docker && cd wazuh-docker
+# Create Monitoring directory
+mkdir monitoring-docker && cd monitoring-docker
 
 # Download docker-compose file
 curl -so docker-compose.yml https://packages.wazuh.com/4.12/docker/docker-compose.yml
 
-# Start Wazuh manager
+# Start Monitoring manager
 sudo docker-compose up -d
 ```
 
 ### Method 2: Quick Single Container
 
 ```bash
-# Run Wazuh manager in single container
+# Run Monitoring manager in single container
 sudo docker run -d \
-  --name wazuh-manager \
+  --name monitoring-manager \
   -p 1514:1514/tcp \
   -p 1515:1515 \
   -p 514:514/udp \
@@ -154,43 +154,43 @@ sudo docker run -d \
 
 ```bash
 # Check manager status
-sudo docker ps | grep wazuh
+sudo docker ps | grep monitoring
 
 # View manager logs
-sudo docker logs wazuh-manager
+sudo docker logs monitoring-manager
 
 # Get manager IP (for agent enrollment)
-sudo docker inspect wazuh-manager | grep IPAddress
+sudo docker inspect monitoring-manager | grep IPAddress
 
 # Access manager shell
-sudo docker exec -it wazuh-manager /bin/bash
+sudo docker exec -it monitoring-manager /bin/bash
 
 # Manage agents from Docker
-sudo docker exec -it wazuh-manager /var/ossec/bin/manage_agents
+sudo docker exec -it monitoring-manager /var/ossec/bin/manage_agents
 
 #List active agent that are connected to manager
-sudo docker exec -it wazuh-manager /var/ossec/bin/agent_control -l
+sudo docker exec -it monitoring-manager /var/ossec/bin/agent_control -l
 
 # Stop manager
-sudo docker stop wazuh-manager
+sudo docker stop monitoring-manager
 
 # Start manager
-sudo docker start wazuh-manager
+sudo docker start monitoring-manager
 
 # Remove manager (data will be lost)
-sudo docker rm -f wazuh-manager
+sudo docker rm -f monitoring-manager
 ```
 
 ### Get Manager IP for Agent Enrollment
 
 ```bash
 # Method 1: Docker inspect
-MANAGER_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' wazuh-manager)
+MANAGER_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' monitoring-manager)
 echo "Manager IP: $MANAGER_IP"
 
 # Method 2: Check all networks
 sudo docker network ls
-sudo docker network inspect bridge | grep -A 3 wazuh
+sudo docker network inspect bridge | grep -A 3 monitoring
 
 # Method 3: Use localhost if port forwarding
 MANAGER_IP="127.0.0.1"  # If using -p 1514:1514
@@ -248,7 +248,7 @@ sudo /var/ossec/bin/manage_agents
 ====================================================
 Client Key Required
 ====================================================
-Please provide the client key obtained from the Wazuh manager.
+Please provide the client key obtained from the Monitoring manager.
 You can get this key by running on the manager:
   sudo /var/ossec/bin/manage_agents -l
 
@@ -376,7 +376,7 @@ cat etc/ossec.conf | grep -A3 server
 **Solution**: Ensure auto-enrollment is disabled and use manual enrollment
 ```bash
 # 1. Remove auto-enrolled agent from manager
-sudo docker exec -it wazuh-manager /var/ossec/bin/manage_agents
+sudo docker exec -it monitoring-manager /var/ossec/bin/manage_agents
 # Choose (R)emove, enter agent ID with hostname
 
 # 2. Stop agent and re-enroll with proper configuration
@@ -419,11 +419,11 @@ nc -zv 172.17.0.2 1514
 **Check manager status:**
 ```bash
 # Docker manager
-sudo docker logs wazuh-manager
-sudo docker exec -it wazuh-manager /var/ossec/bin/wazuh-control status
+sudo docker logs monitoring-manager
+sudo docker exec -it monitoring-manager /var/ossec/bin/monitoring-control status
 
 # Physical manager
-sudo /var/ossec/bin/wazuh-control status
+sudo /var/ossec/bin/monitoring-control status
 ```
 
 #### 3. **Agent Won't Start**
@@ -456,16 +456,16 @@ chmod +x bin/*
 **Manager not accessible:**
 ```bash
 # Check if container is running
-sudo docker ps | grep wazuh
+sudo docker ps | grep monitoring
 
 # Check container IP
-sudo docker inspect wazuh-manager | grep IPAddress
+sudo docker inspect monitoring-manager | grep IPAddress
 
 # Check port mapping
-sudo docker port wazuh-manager
+sudo docker port monitoring-manager
 
 # Restart container
-sudo docker restart wazuh-manager
+sudo docker restart monitoring-manager
 ```
 
 ### Debug Mode
@@ -549,7 +549,7 @@ The Windows agent uses the same configuration approach:
 .\monitoring-agent-control.ps1 logs 50
 
 # Windows firewall configuration
-netsh advfirewall firewall add rule name="Wazuh Agent" dir=out action=allow protocol=TCP remoteport=1514
+netsh advfirewall firewall add rule name="Monitoring Agent" dir=out action=allow protocol=TCP remoteport=1514
 ```
 
 ---
@@ -581,7 +581,7 @@ monitoring-agent/
 ### Environment Variables
 
 ```bash
-# Wazuh compatibility
+# Monitoring Agent compatibility
 export WAZUH_HOME="/path/to/monitoring-agent"
 export OSSEC_HOME="/path/to/monitoring-agent"
 

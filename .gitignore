@@ -1,7 +1,7 @@
 # Ignore log files
 logs/*
 logs/ossec.log*
-logs/wazuh-*.log*
+logs/monitoring-*.log*
 
 # Ignore runtime files and queue databases
 var/run/*

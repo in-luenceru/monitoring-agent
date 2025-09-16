@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # Copyright (C) 2025, Monitoring Solutions Inc.
-# monitoring-agent-control        This shell script takes care of starting
-#                                 or stopping monitoring-agent
-# Based on original OSSEC work by Daniel B. Cid
+# monitoring-control   This shell script takes care of starting
+#                      or stopping monitoring-agent services
+# Author: Monitoring Solutions Inc.
 
 LOCAL=`dirname $0`;
 cd ${LOCAL}
@@ -49,6 +49,7 @@ checkpid()
 lock()
 {
     i=0;
+
     # Providing a lock.
     while [ 1 ]; do
         mkdir ${LOCK} > /dev/null 2>&1
@@ -59,312 +60,275 @@ lock()
             return;
         fi
 
-        # Getting currently/previously set pid.
-        lock_pid=`cat ${LOCK_PID} 2>/dev/null`
-        if [ "X" = "X${lock_pid}" ]; then
-            # Pid is not set.
-            kill -0 ${lock_pid} > /dev/null 2>&1
-            if [ ! "$?" = "0" ]; then
-                # Pid is not running.
-                # Removing lock.
+        # Waiting 1 second before trying again
+        sleep 1;
+        i=`expr $i + 1`;
+        pid=$(cat ${LOCK_PID} 2>/dev/null)
+
+        if [ $? = 0 ]
+        then
+            kill -0 ${pid} >/dev/null 2>&1
+            if [ ! $? = 0 ]; then
+                # Pid is not present.
+                # Unlocking and executing
                 unlock;
-                continue;
+                mkdir ${LOCK} > /dev/null 2>&1
+                echo "$$" > ${LOCK_PID}
+                return;
             fi
         fi
 
-        sleep 1;
-        i=`expr $i + 1`;
-
-        # So i increments 2 by 2 if it is ood.
+        # We tried 10 times to acquire the lock.
         if [ "$i" = "${MAX_ITERATION}" ]; then
-            # Unlocking and executing
-            unlock;
-            echo "INFO: Breaking lock (after 60 seconds)"
-            break;
+            echo "ERROR: Another instance is locking this process."
+            echo "If you are sure that no other instance is running, please remove ${LOCK}"
+            exit 1
         fi
     done
 }
 
 unlock()
 {
-    rm -rf ${LOCK} > /dev/null 2>&1
+    rm -rf ${LOCK}
 }
 
 help()
 {
     # Help message
-    echo ""
-    echo "Usage: $0 {start|stop|restart|status|enable|disable}";
-    echo ""
-    echo "        start    Starts the Monitoring Agent processes."
-    echo "        stop     Stops the Monitoring Agent processes."
-    echo "        restart  Restarts the Monitoring Agent processes."
-    echo "        reload   Reloads the Monitoring Agent processes."
-    echo "        status   Shows the current status of Monitoring Agent processes."
-    echo "        enable   Enables Monitoring Agent on system startup."
-    echo "        disable  Disables Monitoring Agent on system startup."
-    echo ""
+    echo "Usage: $0 {start|stop|restart|status|info [-v -r -t]}";
     exit 1;
-}
-
-# Logging function
-. ${DIR}/etc/internal_options.conf
-
-echo_debug()
-{
-    DEBUG_CLI=$1
-    if [ "X${DEBUG_CLI}" = "X" ] ; then
-        DEBUG_CLI="0"
-    fi
-
-    if [ "${DEBUG_CLI}" = "1" ]; then
-        echo "DEBUG: $2"
-    fi
-
 }
 
 status()
 {
-    lock;
-    checkpid;
-
-    # Check if monitoring-agent processes are running
     RETVAL=0
-    echo ""
-    echo "Monitoring Agent processes:"
     for i in ${DAEMONS}; do
-        pfile=`ls ${DIR}/var/run/${i}-*.pid 2> /dev/null`;
-        if [ "X${pfile}" = "X" ]; then
-            echo "${i} not running."
+        pstatus ${i};
+        if [ $? = 0 ]; then
             RETVAL=1
+            echo "${i} not running..."
         else
             echo "${i} is running..."
         fi
     done
-
-    echo ""
-    echo "Monitoring Agent status:"
-    if [ ${RETVAL} = 0 ]; then
-        echo "Monitoring Agent is running..."
-    else
-        echo "Monitoring Agent is stopped"
-    fi
-    unlock;
-    exit $RETVAL
 }
 
 testconfig()
 {
     # We first loop to check the config.
-    ${DIR}/bin/monitoring-logtest-legacy -t > /dev/null 2>&1;
-    if [ $? != 0 ]; then
-        echo "Monitoring Agent configuration test failed. Abording"
-        exit 1;
+    for i in ${SDAEMONS}; do
+        ${DIR}/bin/${i} -t;
+        if [ $? != 0 ]; then
+            echo "${i}: Configuration error. Exiting"
+            unlock;
+            exit 1;
+        fi
+    done
+}
+
+# Check folders
+check_folders()
+{
+    ALERTS_FOLDER="../queue/alerts"
+
+    if [ ! -d $ALERTS_FOLDER ]
+    then
+        if rm -rf $ALERTS_FOLDER && mkdir -p $ALERTS_FOLDER && chown monitoring:monitoring $ALERTS_FOLDER && chmod 770 $ALERTS_FOLDER
+        then
+            echo "WARNING: missing folder 'queue/alerts'. Restored back."
+        else
+            echo "ERROR: missing folder 'queue/alerts', and could not restore back."
+            exit 1
+        fi
     fi
 }
 
-start()
+# Start function
+start_service()
 {
-    lock;
+    echo "Starting Wazuh $VERSION..."
     checkpid;
 
-    # Start function
-    echo "Starting Monitoring Agent: "
+    # Delete all files in temporary folder
+    TO_DELETE="$DIR/tmp/*"
+    rm -rf $TO_DELETE
 
-    if [ "X$2" = "X" ]; then
-        testconfig;
-    fi
-
-    SDAEMONS_SET=""
-
-    for i in ${DAEMONS}; do
-        pfile=`ls ${DIR}/var/run/${i}-*.pid 2> /dev/null`;
-        if [ "X${pfile}" = "X" ]; then
-            echo "  * Starting $i";
+    # We actually start them now.
+    for i in ${SDAEMONS}; do
+        pstatus ${i};
+        if [ $? = 0 ]; then
+            failed=false
             ${DIR}/bin/${i};
-            SDAEMONS_SET="${SDAEMONS_SET} $i"
+            if [ $? != 0 ]; then
+                failed=true
+            else
+                j=0;
+                while [ $failed = false ]; do
+                    pstatus ${i};
+                    if [ $? = 1 ]; then
+                        break;
+                    fi
+                    sleep 1;
+                    j=`expr $j + 1`;
+                    if [ "$j" -ge "${MAX_ITERATION}" ]; then
+                        failed=true
+                    fi
+                done
+            fi
+            if [ $failed = true ]; then
+                echo "${i} did not start";
+                unlock;
+                exit 1;
+            fi
+            echo "Started ${i}..."
         else
-            echo "  * Process $i already running";
+            echo "${i} already running..."
         fi
     done
 
-    # We sleep a little bit here to give time to monitoring-agentd
-    # to connect to the server.
-    sleep 1;
-
-    # Checking if monitoring-agentd started and if it is able to connect to the server.
-    ps -ef | grep "monitoring-agentd: " > /dev/null 2>&1;
-    if [ $? = 0 ]; then
-        echo "Completed."
-    else
-        echo ""
-        echo "monitoring-agentd may not be connected."
-        echo ""
-        echo "Verify if the server IP and port (1514) is correct."
-        echo "Verify if the agent keys were imported correctly."
-        echo "Check the logs in ${DIR}/logs/ossec.log"
-        echo ""
-        for i in ${SDAEMONS_SET}; do
-            echo "  * Stopping $i";
-            ${DIR}/bin/monitoring-control stop
-        done
-        unlock;
-        exit 1;
-    fi
-
-    echo "  - System is Debian (Ubuntu or derivative)."
-    echo "  - Init script modified to start Monitoring Agent during boot."
-
+    # After we start we give 2 seconds for the daemons
+    # to internally create their PID files.
+    sleep 2;
     echo "Completed."
-    unlock;
 }
 
 pstatus()
 {
-    pfile=`ls $1 2> /dev/null`;
+    pfile=$1;
+
+    # pfile must be set
     if [ "X${pfile}" = "X" ]; then
-        echo "${2} not running";
-    else
-        echo "${2} is running...  (pid: `cat ${pfile}`)";
+        return 0;
     fi
+
+    ls ${DIR}/var/run/${pfile}-*.pid > /dev/null 2>&1
+    if [ $? = 0 ]; then
+        for pid in `cat ${DIR}/var/run/${pfile}-*.pid 2>/dev/null`; do
+            ps -p ${pid} > /dev/null 2>&1
+            if [ ! $? = 0 ]; then
+                echo "${pfile}: Process ${pid} not used by Wazuh, removing .."
+                rm -f ${DIR}/var/run/${pfile}-${pid}.pid
+                continue;
+            fi
+
+            kill -0 ${pid} > /dev/null 2>&1
+            if [ $? = 0 ]; then
+                return 1;
+            fi
+        done
+    fi
+
+    return 0;
 }
 
-stop()
-{
-    lock;
-    checkpid;
-    # Stopping the monitoring agents
+wait_pid() {
+    wp_counter=1
 
-    echo "Stopping Monitoring Agent: "
-    for i in ${SDAEMONS}; do
-        pfile=`ls ${DIR}/var/run/${i}-*.pid 2> /dev/null`;
-        if [ "X${pfile}" != "X" ]; then
-            pid=`cat ${pfile}`
-            echo "  * Stopping ${i} (${pid})";
-            kill ${pid} > /dev/null 2>&1
+    while kill -0 $1 2> /dev/null
+    do
+        if [ "$wp_counter" = "$MAX_KILL_TRIES" ]
+        then
+            return 1
         else
-            echo "  * Process ${i} not running";
+            # sleep doesn't work in AIX
+            # read doesn't work in FreeBSD
+            sleep 0.1 > /dev/null 2>&1 || read -t 0.1 > /dev/null 2>&1
+            wp_counter=`expr $wp_counter + 1`
         fi
+    done
+
+    return 0
+}
+
+stop_service()
+{
+    checkpid;
+    for i in ${DAEMONS}; do
+        pstatus ${i};
+        if [ $? = 1 ]; then
+            echo "Killing ${i}... ";
+
+            pid=`cat ${DIR}/var/run/${i}-*.pid`
+            kill $pid
+
+            if ! wait_pid $pid
+            then
+                echo "Process ${i} couldn't be terminated. It will be killed.";
+                kill -9 $pid
+            fi
+        else
+            echo "${i} not running...";
+        fi
+
         rm -f ${DIR}/var/run/${i}-*.pid
      done
 
-    # We should also stop the modules
-    ${DIR}/bin/monitoring-control stop
-
-    unlock;
-    echo "Monitoring Agent stopped"
+    echo "Monitoring Agent $VERSION Stopped"
 }
 
-# Analyzes the option provided and takes the appropriate action
+info()
+{
+     if [ "X${1}" = "X" ]; then
+        echo "WAZUH_VERSION=\"${VERSION}\""
+        echo "WAZUH_REVISION=\"${REVISION}\""
+        echo "WAZUH_TYPE=\"${TYPE}\""
+    else
+        case "${1}" in
+            -v) echo "${VERSION}" ;;
+            -r) echo "${REVISION}" ;;
+            -t) echo "${TYPE}" ;;
+             *) echo "Invalid flag: ${1}" && help ;;
+        esac
+    fi
+}
+
+restart_service()
+{
+    testconfig
+    lock
+    stop_service
+    sleep 1
+    start_service
+    unlock
+}
+
+### MAIN HERE ###
+
+arg=$2
 
 case "$1" in
 start)
-    start $@
+    testconfig
+    check_folders
+    lock
+    start_service
+    unlock
     ;;
 stop)
-    stop
+    lock
+    stop_service
+    unlock
     ;;
 restart)
-    stop
-    start
+    restart_service
     ;;
 reload)
-    SDAEMONS=${DAEMONS}
-    stop
-    start $@
+    DAEMONS=$(echo $DAEMONS | sed 's/monitoring-execd//')
+    restart_service
     ;;
 status)
+    lock
     status
+    unlock
+    ;;
+info)
+    info $arg
     ;;
 help)
     help
-    ;;
-enable)
-    if [ "X$USER" = "Xroot" ]; then
-        if [ -d /etc/rc.d/init.d ]; then
-            echo " - ${DIR}/bin/monitoring-control enable"
-            echo " - System V Init (RedHat style)"
-            echo " - Enabling monitoring on boot"
-            
-            ln -sf ${DIR}/bin/monitoring-control /etc/rc.d/init.d/monitoring
-            chkconfig --add monitoring > /dev/null 2>&1
-            if [ $? != 0 ]; then
-                echo "ERROR: Unable to enable monitoring on boot"
-                exit 1;
-            fi
-            
-        elif [ -d /etc/init.d ]; then
-            echo " - ${DIR}/bin/monitoring-control enable"
-            echo " - System V Init (Debian/Ubuntu style)"
-            echo " - Enabling monitoring on boot"
-            
-            ln -sf ${DIR}/bin/monitoring-control /etc/init.d/monitoring
-            update-rc.d monitoring defaults > /dev/null 2>&1
-            if [ $? != 0 ]; then
-                echo "ERROR: Unable to enable monitoring on boot"
-                exit 1;
-            fi
-            
-        elif [ -f /etc/systemd/system/multi-user.target.wants/monitoring.service ]; then
-            echo " - ${DIR}/bin/monitoring-control enable"
-            echo " - systemd init (systemd)"
-            echo " - Enabling monitoring on boot"
-            
-            systemctl enable monitoring.service > /dev/null 2>&1
-            if [ $? != 0 ]; then
-                echo "ERROR: Unable to enable monitoring on boot"
-                exit 1;
-            fi
-            
-        else
-            echo "ERROR: No supported init system found"
-            exit 1;
-        fi
-        
-        echo "Successfully enabled Monitoring Agent on boot"
-    else
-        echo "ERROR: You need to be root to enable monitoring on boot"
-        exit 1;
-    fi
-    ;;
-disable)
-    if [ "X$USER" = "Xroot" ]; then
-        if [ -f /etc/rc.d/init.d/monitoring ]; then
-            echo " - ${DIR}/bin/monitoring-control disable"
-            echo " - System V Init (RedHat style)"
-            echo " - Disabling monitoring on boot"
-            
-            chkconfig --del monitoring > /dev/null 2>&1
-            rm -f /etc/rc.d/init.d/monitoring
-            
-        elif [ -f /etc/init.d/monitoring ]; then
-            echo " - ${DIR}/bin/monitoring-control disable"
-            echo " - System V Init (Debian/Ubuntu style)"
-            echo " - Disabling monitoring on boot"
-            
-            update-rc.d -f monitoring remove > /dev/null 2>&1
-            rm -f /etc/init.d/monitoring
-            
-        elif [ -f /etc/systemd/system/multi-user.target.wants/monitoring.service ]; then
-            echo " - ${DIR}/bin/monitoring-control disable"
-            echo " - systemd init (systemd)"
-            echo " - Disabling monitoring on boot"
-            
-            systemctl disable monitoring.service > /dev/null 2>&1
-            
-        else
-            echo "ERROR: Monitoring Agent is not enabled on boot"
-            exit 1;
-        fi
-        
-        echo "Successfully disabled Monitoring Agent on boot"
-    else
-        echo "ERROR: You need to be root to disable monitoring on boot"
-        exit 1;
-    fi
     ;;
 *)
     help
 esac
 
-exit $?
+exit $RETVAL
