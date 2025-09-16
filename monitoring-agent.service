@@ -6,7 +6,7 @@ Wants=network.target
 
 [Service]
 Type=forking
-User=monitorin
+User=monitoring
 Group=monitoring
 ExecStartPre=/home/anandhu/monitor/bin/monitoring-control testconfig
 ExecStart=/home/anandhu/monitor/bin/monitoring-control start
