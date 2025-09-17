@@ -14,7 +14,7 @@ The bypass uses the `LD_PRELOAD` mechanism to intercept system library calls:
 2. **Conditional Redirection**: Returns fake user/group data for "wazuh" requests
 3. **Passthrough**: All other user/group lookups are forwarded to the original system functions
 
-### Technical Details
+### Technical Detail
 
 **Intercepted Functions:**
 - `getpwnam()` - User lookup by name
