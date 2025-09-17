@@ -1,36 +1,42 @@
 [Unit]
-Description=Monitoring Agent Security Platform
+Description=Monitoring Agent Security Platform - Fault-Tolerant Service
 Documentation=https://docs.monitoring-solutions.com
-After=network.target
+After=network.target multi-user.target
 Wants=network.target
 
 [Service]
-Type=forking
-User=monitoring
-Group=monitoring
-ExecStartPre=/home/anandhu/monitor/bin/monitoring-control testconfig
-ExecStart=/home/anandhu/monitor/bin/monitoring-control start
-ExecStop=/home/anandhu/monitor/bin/monitoring-control stop
-ExecReload=/home/anandhu/monitor/bin/monitoring-control reload
-PIDFile=/home/anandhu/monitor/var/run/monitoring-agentd-*.pid
-TimeoutSec=300
-RestartSec=5
-Restart=on-failure
-RestartPreventExitStatus=1
+Type=exec
+User=root
+Group=root
+WorkingDirectory=/home/anandhu/monitor
 
-# Security hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/home/anandhu/monitor
-PrivateTmp=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+# Pre-start checks
+ExecStartPre=/bin/bash -c 'chown -R monitoring:monitoring /home/anandhu/monitor || true'
+ExecStartPre=/home/anandhu/monitor/monitoring-agent-control.sh test-config
 
-# Resource limits
-LimitNOFILE=65536
-LimitNPROC=32768
+# Main service execution
+ExecStart=/home/anandhu/monitor/monitoring-agent-control.sh start-service
+ExecStop=/home/anandhu/monitor/monitoring-agent-control.sh stop
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Fault-tolerant restart configuration
+Restart=always
+RestartSec=5s
+StartLimitBurst=5
+
+# Process monitoring
+TimeoutStartSec=180s
+TimeoutStopSec=30s
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Environment and logging
+Environment="MONITORING_SERVICE_MODE=1"
+Environment="MONITORING_AUTO_RESTART=1"
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=monitoring-agent
 
 [Install]
 WantedBy=multi-user.target
+WantedBy=multi-user.target default.target

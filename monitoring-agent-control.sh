@@ -512,7 +512,7 @@ pstatus(){
 
 # Start function
 start_agent() {
-    echo "Starting Monitoring Agent $VERSION..."
+    echo "Starting Monitoring Agent $VERSION with Fault Tolerance..."
     
     # Ensure proper environment before starting
     ensure_environment
@@ -523,6 +523,9 @@ start_agent() {
     # Delete all files in temporary folder
     TO_DELETE="$DIR/tmp/*"
     rm -rf $TO_DELETE 2>/dev/null || true
+
+    # Initialize fault tolerance components
+    start_fault_tolerance_components
 
     # Start daemons in reverse order
     for i in ${SDAEMONS}; do
@@ -584,6 +587,39 @@ start_agent() {
     
     if [ $running_count -gt 0 ]; then
         echo "✓ Monitoring Agent started successfully! ($running_count/5 daemons running)"
+        
+        # Mark agent as running for boot recovery
+        local boot_recovery_script="${SCRIPT_DIR}/scripts/monitoring-boot-recovery.sh"
+        if [[ -f "$boot_recovery_script" ]]; then
+            "$boot_recovery_script" mark-running 2>/dev/null || true
+        fi
+        
+        # Complete fault tolerance initialization after successful start
+        complete_fault_tolerance_startup
+        echo "✓ Fault tolerance components activated"
+        
+        # Ensure systemd service is properly set up for auto-startup
+        systemctl_available=false
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl_available=true
+        fi
+        
+        if [ "$systemctl_available" = true ]; then
+            # Check if service is enabled
+            if ! systemctl is-enabled monitoring-agent.service >/dev/null 2>&1; then
+                systemctl enable monitoring-agent.service >/dev/null 2>&1 || true
+                log "INFO" "Enabled auto-startup for monitoring-agent.service"
+            fi
+            
+            # Start watchdog service if available (non-blocking)
+            if systemctl list-unit-files monitoring-agent-watchdog.service >/dev/null 2>&1; then
+                if ! systemctl is-active monitoring-agent-watchdog.service >/dev/null 2>&1; then
+                    # Use nohup to make this non-blocking to prevent systemd timeout
+                    nohup systemctl start monitoring-agent-watchdog.service >/dev/null 2>&1 &
+                    log "INFO" "Started watchdog service for process monitoring"
+                fi
+            fi
+        fi
     else
         echo "✗ Failed to start Monitoring Agent"
         unlock;
@@ -592,6 +628,17 @@ start_agent() {
 }
 stop_agent() 
 {
+    echo "Stopping Monitoring Agent $VERSION and Fault Tolerance..."
+    
+    # Mark agent as stopped for boot recovery
+    local boot_recovery_script="${SCRIPT_DIR}/scripts/monitoring-boot-recovery.sh"
+    if [[ -f "$boot_recovery_script" ]]; then
+        "$boot_recovery_script" mark-stopped 2>/dev/null || true
+    fi
+    
+    # Stop fault tolerance components first
+    stop_fault_tolerance_components
+    
     checkpid;
     for i in ${DAEMONS}; do
         pstatus ${i};
@@ -642,6 +689,66 @@ stop_process() {
             kill -9 "$pid" 2>/dev/null || true
             sleep 2
         fi
+    fi
+}
+
+# Restart a single process (used by watchdog)
+restart_single_process() {
+    local process_name="$1"
+    
+    log "INFO" "Restarting individual process: $process_name"
+    
+    # Check if it's a valid process
+    local is_valid=false
+    for daemon in $DAEMONS; do
+        if [[ "$daemon" == "$process_name" ]]; then
+            is_valid=true
+            break
+        fi
+    done
+    
+    if [[ "$is_valid" != "true" ]]; then
+        log "ERROR" "Unknown process: $process_name"
+        return 1
+    fi
+    
+    # Stop the process if running
+    if pstatus "$process_name" &>/dev/null; then
+        log "DEBUG" "Stopping $process_name before restart"
+        stop_process "$process_name"
+        sleep 2
+    fi
+    
+    # Start the process
+    log "DEBUG" "Starting $process_name"
+    local binary=$(get_binary_name "$process_name")
+    local daemon_args=$(get_daemon_args "$process_name")
+    
+    if [[ -f "${DIR}/bin/${binary}" ]]; then
+        # Use environment variable bypass if available
+        if [[ -f "$BYPASS_LIB" ]]; then
+            LD_PRELOAD="$BYPASS_LIB" "${DIR}/bin/${binary}" $daemon_args &
+        else
+            "${DIR}/bin/${binary}" $daemon_args &
+        fi
+        
+        # Wait for process to start
+        local max_wait=30
+        local wait_count=0
+        while [[ $wait_count -lt $max_wait ]]; do
+            if pstatus "$process_name" &>/dev/null; then
+                log "INFO" "Successfully restarted $process_name"
+                return 0
+            fi
+            sleep 1
+            wait_count=$((wait_count + 1))
+        done
+        
+        log "ERROR" "Failed to restart $process_name - timeout waiting for process to start"
+        return 1
+    else
+        log "ERROR" "Binary not found for $process_name: ${DIR}/bin/${binary}"
+        return 1
     fi
 }
 
@@ -705,7 +812,324 @@ show_logs() {
     fi
 }
 
+# ======================================================================
+# FAULT TOLERANCE FUNCTIONS
+# ======================================================================
+
+# Start fault tolerance components
+start_fault_tolerance_components() {
+    log "DEBUG" "Initializing fault tolerance components..."
+    
+    # Start background watchdog process
+    start_watchdog_process
+    
+    # Initialize logging and alerting
+    initialize_logging_system
+    
+    # Set up signal handlers for graceful shutdown
+    setup_signal_handlers
+}
+
+# Complete fault tolerance startup (after main agent processes are running)
+complete_fault_tolerance_startup() {
+    log "DEBUG" "Completing fault tolerance startup..."
+    
+    # Start monitoring processes for health
+    start_process_monitoring
+    
+    # Initialize recovery mechanisms
+    initialize_recovery_system
+    
+    # Send startup notification
+    send_startup_notification
+}
+
+# Stop fault tolerance components
+stop_fault_tolerance_components() {
+    log "DEBUG" "Stopping fault tolerance components..."
+    
+    # Stop watchdog process
+    stop_watchdog_process
+    
+    # Stop background monitoring
+    stop_process_monitoring
+    
+    # Send shutdown notification
+    send_shutdown_notification
+}
+
+# Start the watchdog process in background
+start_watchdog_process() {
+    local watchdog_script="${SCRIPT_DIR}/scripts/monitoring-watchdog.sh"
+    local watchdog_pid_file="${PID_DIR}/monitoring-watchdog.pid"
+    
+    if [[ -f "$watchdog_script" ]]; then
+        log "DEBUG" "Starting process watchdog..."
+        
+        # Stop existing watchdog if running
+        if [[ -f "$watchdog_pid_file" ]]; then
+            local old_pid=$(cat "$watchdog_pid_file" 2>/dev/null)
+            if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+                kill "$old_pid" 2>/dev/null || true
+                sleep 1
+            fi
+            rm -f "$watchdog_pid_file"
+        fi
+        
+        # Start new watchdog process
+        nohup "$watchdog_script" > /dev/null 2>&1 &
+        local watchdog_pid=$!
+        echo "$watchdog_pid" > "$watchdog_pid_file"
+        
+        # Verify watchdog started
+        sleep 2
+        if kill -0 "$watchdog_pid" 2>/dev/null; then
+            log "DEBUG" "Process watchdog started (PID: $watchdog_pid)"
+        else
+            log "WARN" "Failed to start process watchdog"
+        fi
+    else
+        log "DEBUG" "Watchdog script not found, skipping process monitoring"
+    fi
+}
+
+# Stop the watchdog process
+stop_watchdog_process() {
+    local watchdog_pid_file="${PID_DIR}/monitoring-watchdog.pid"
+    
+    if [[ -f "$watchdog_pid_file" ]]; then
+        local watchdog_pid=$(cat "$watchdog_pid_file" 2>/dev/null)
+        if [[ -n "$watchdog_pid" ]] && kill -0 "$watchdog_pid" 2>/dev/null; then
+            log "DEBUG" "Stopping process watchdog (PID: $watchdog_pid)..."
+            kill "$watchdog_pid" 2>/dev/null || true
+            
+            # Wait for graceful shutdown
+            for i in {1..10}; do
+                if ! kill -0 "$watchdog_pid" 2>/dev/null; then
+                    break
+                fi
+                sleep 1
+            done
+            
+            # Force kill if still running
+            if kill -0 "$watchdog_pid" 2>/dev/null; then
+                kill -9 "$watchdog_pid" 2>/dev/null || true
+            fi
+        fi
+        rm -f "$watchdog_pid_file"
+        log "DEBUG" "Process watchdog stopped"
+    fi
+}
+
+# Initialize logging and alerting system
+initialize_logging_system() {
+    local logging_script="${SCRIPT_DIR}/scripts/monitoring-logging.sh"
+    
+    if [[ -f "$logging_script" ]]; then
+        log "DEBUG" "Initializing enhanced logging system..."
+        
+        # Create alert configuration if it doesn't exist
+        if [[ ! -f "${AGENT_HOME}/etc/monitoring-alerts.conf" ]]; then
+            "$logging_script" init-config
+        fi
+        
+        # Initialize alert state
+        "$logging_script" init > /dev/null 2>&1 || true
+        
+        log "DEBUG" "Enhanced logging system initialized"
+    fi
+}
+
+# Start process monitoring
+start_process_monitoring() {
+    local recovery_script="${SCRIPT_DIR}/scripts/monitoring-recovery.sh"
+    
+    if [[ -f "$recovery_script" ]]; then
+        log "DEBUG" "Starting recovery monitoring..."
+        
+        # Run initial health check
+        "$recovery_script" health-check > /dev/null 2>&1 || true
+        
+        # Start background recovery monitoring
+        (
+            while true; do
+                sleep 300  # 5 minutes
+                "$recovery_script" health-check > /dev/null 2>&1 || true
+            done
+        ) &
+        
+        echo $! > "${PID_DIR}/monitoring-recovery.pid"
+        log "DEBUG" "Recovery monitoring started"
+    fi
+}
+
+# Stop process monitoring
+stop_process_monitoring() {
+    local recovery_pid_file="${PID_DIR}/monitoring-recovery.pid"
+    
+    if [[ -f "$recovery_pid_file" ]]; then
+        local recovery_pid=$(cat "$recovery_pid_file" 2>/dev/null)
+        if [[ -n "$recovery_pid" ]] && kill -0 "$recovery_pid" 2>/dev/null; then
+            kill "$recovery_pid" 2>/dev/null || true
+        fi
+        rm -f "$recovery_pid_file"
+        log "DEBUG" "Recovery monitoring stopped"
+    fi
+}
+
+# Initialize recovery system
+initialize_recovery_system() {
+    # Create state tracking directory
+    mkdir -p "${AGENT_HOME}/var/state" 2>/dev/null || true
+    
+    # Record startup time
+    date +%s > "${AGENT_HOME}/var/state/startup_time"
+    
+    # Initialize process restart counters
+    for daemon in $DAEMONS; do
+        echo "0" > "${AGENT_HOME}/var/state/restart_count_${daemon}" 2>/dev/null || true
+    done
+    
+    log "DEBUG" "Recovery system initialized"
+}
+
+# Setup signal handlers for graceful shutdown
+setup_signal_handlers() {
+    # These will be handled by the main script
+    trap 'handle_shutdown_signal' TERM INT
+}
+
+# Handle shutdown signals
+handle_shutdown_signal() {
+    log "INFO" "Received shutdown signal, stopping fault tolerance components..."
+    stop_fault_tolerance_components
+    exit 0
+}
+
+# Send startup notification
+send_startup_notification() {
+    local logging_script="${SCRIPT_DIR}/scripts/monitoring-logging.sh"
+    
+    if [[ -f "$logging_script" ]]; then
+        "$logging_script" send-alert "INFO" "Monitoring Agent Started" \
+            "Monitoring Agent v${VERSION} started successfully with fault tolerance enabled. All critical processes are monitored and will be automatically restarted if needed." > /dev/null 2>&1 || true
+    fi
+}
+
+# Send shutdown notification
+send_shutdown_notification() {
+    local logging_script="${SCRIPT_DIR}/scripts/monitoring-logging.sh"
+    
+    if [[ -f "$logging_script" ]]; then
+        "$logging_script" send-alert "INFO" "Monitoring Agent Stopped" \
+            "Monitoring Agent v${VERSION} has been stopped gracefully. Fault tolerance components have been deactivated." > /dev/null 2>&1 || true
+    fi
+}
+
+# Enhanced health check with fault tolerance validation
+health_check_with_fault_tolerance() {
+    log "INFO" "Running comprehensive health check with fault tolerance validation..."
+    
+    local errors=0
+    
+    # Run standard health check first
+    if ! health_check; then
+        errors=$((errors + 1))
+    fi
+    
+    # Check watchdog process
+    local watchdog_pid_file="${PID_DIR}/monitoring-watchdog.pid"
+    local systemd_watchdog_active=false
+    
+    # Check if systemd watchdog service is running
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl is-active monitoring-agent-watchdog.service >/dev/null 2>&1; then
+            systemd_watchdog_active=true
+            log "INFO" "✓ Systemd watchdog service is active"
+        fi
+    fi
+    
+    # If systemd watchdog is not running, check for standalone watchdog
+    if [ "$systemd_watchdog_active" = false ]; then
+        if [[ -f "$watchdog_pid_file" ]]; then
+            local watchdog_pid=$(cat "$watchdog_pid_file" 2>/dev/null)
+            if [[ -n "$watchdog_pid" ]] && kill -0 "$watchdog_pid" 2>/dev/null; then
+                log "INFO" "✓ Standalone watchdog is running (PID: $watchdog_pid)"
+            else
+                log "WARN" "Watchdog process not running - starting watchdog service"
+                # Try to start watchdog service automatically
+                if command -v systemctl >/dev/null 2>&1; then
+                    systemctl start monitoring-agent-watchdog.service >/dev/null 2>&1 || {
+                        # Fallback to standalone watchdog
+                        start_watchdog_process
+                    }
+                else
+                    start_watchdog_process
+                fi
+            fi
+        else
+            log "WARN" "Watchdog not configured - setting up watchdog"
+            start_watchdog_process
+        fi
+    fi
+    
+    # Check fault tolerance components
+    local recovery_pid_file="${PID_DIR}/monitoring-recovery.pid"
+    if [[ -f "$recovery_pid_file" ]]; then
+        local recovery_pid=$(cat "$recovery_pid_file" 2>/dev/null)
+        if [[ -n "$recovery_pid" ]] && kill -0 "$recovery_pid" 2>/dev/null; then
+            log "INFO" "✓ Recovery monitoring is running (PID: $recovery_pid)"
+        else
+            log "WARN" "Recovery monitoring is not running"
+        fi
+    fi
+    
+    # Check restart counters
+    local restart_dir="${AGENT_HOME}/var/state"
+    if [[ -d "$restart_dir" ]]; then
+        local total_restarts=0
+        for daemon in $DAEMONS; do
+            local restart_file="${restart_dir}/restart_count_${daemon}"
+            if [[ -f "$restart_file" ]]; then
+                local count=$(cat "$restart_file" 2>/dev/null || echo "0")
+                total_restarts=$((total_restarts + count))
+                if [[ $count -gt 0 ]]; then
+                    log "INFO" "Process $daemon has been restarted $count times"
+                fi
+            fi
+        done
+        log "INFO" "Total process restarts since startup: $total_restarts"
+    fi
+    
+    # Check system boot persistence
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl is-enabled monitoring-agent.service >/dev/null 2>&1; then
+            log "INFO" "✓ Service is enabled for auto-startup after reboot"
+        else
+            log "WARN" "Service not enabled for auto-startup - enabling now"
+            systemctl enable monitoring-agent.service >/dev/null 2>&1 || true
+        fi
+    fi
+    
+    if ((errors == 0)); then
+        log "INFO" "✓ Comprehensive health check passed"
+        return 0
+    else
+        log "ERROR" "✗ Comprehensive health check failed with $errors errors"
+        return 1
+    fi
+}
+
+# ======================================================================
+# END FAULT TOLERANCE FUNCTIONS
+# ======================================================================
+
 enroll_agent() {
+    # NOTE: This enrollment function now accepts either a plain client key line
+    # ("001 name ip keyhex...") or a base64-encoded string containing that line.
+    # If a base64 string is provided (interactive or via the agent_key parameter),
+    # we attempt to decode it automatically and validate the resulting key line.
+    # This simplifies enrollment when managers only provide an encoded key.
     local manager_input="$1"
     local manager_port="$2"
     local agent_name="${3:-$(hostname)}"
@@ -763,13 +1187,32 @@ enroll_agent() {
         echo "The key should be in format:"
         echo "  001 agent-name 192.168.1.100 abc123...def456"
         echo ""
-        read -p "Enter the complete client key line: " -r client_key_line
+    read -p "Enter the complete client key line (or paste base64-encoded key): " -r client_key_line
         
         if [[ -z "$client_key_line" ]]; then
             log "ERROR" "Client key is required for enrollment"
             return 1
         fi
         
+        # If the provided client_key_line looks like base64, try to decode it automatically
+        if [[ "$client_key_line" =~ ^[A-Za-z0-9+/=]+$ ]]; then
+            # Try base64 -d, fallback to openssl if available
+            decoded=""
+            decoded=$(echo "$client_key_line" | base64 -d 2>/dev/null || true)
+            if [[ -z "$decoded" ]] && command -v openssl >/dev/null 2>&1; then
+                decoded=$(echo "$client_key_line" | openssl base64 -d -A 2>/dev/null || true)
+            fi
+
+            if [[ -n "$decoded" ]]; then
+                # Trim whitespace/newlines
+                decoded=$(echo "$decoded" | tr -d '\r' | sed -e 's/[[:space:]]\+/ /g' -e 's/^ //g' -e 's/ $//g')
+                log "DEBUG" "Decoded base64 client key: $decoded"
+                client_key_line="$decoded"
+            else
+                log "WARN" "Provided client key looks like base64 but failed to decode; continuing with original input"
+            fi
+        fi
+
         # Parse the client key line
         if ! parse_client_key "$client_key_line"; then
             log "ERROR" "Invalid client key format"
@@ -783,9 +1226,36 @@ enroll_agent() {
         agent_key=$(echo "$client_key_line" | awk '{print $4}')
     else
         # If key provided, ensure we have agent_id
+        # Support case where user passes a single base64 string as the $agent_key parameter
         if [[ -z "${agent_id:-}" ]]; then
-            log "ERROR" "Agent ID is required when providing agent key"
-            return 1
+            if [[ "${agent_key}" =~ ^[A-Za-z0-9+/=]+$ ]]; then
+                # Try to decode to a full client key line
+                decoded=""
+                decoded=$(echo "$agent_key" | base64 -d 2>/dev/null || true)
+                if [[ -z "$decoded" ]] && command -v openssl >/dev/null 2>&1; then
+                    decoded=$(echo "$agent_key" | openssl base64 -d -A 2>/dev/null || true)
+                fi
+
+                if [[ -n "$decoded" ]]; then
+                    decoded=$(echo "$decoded" | tr -d '\r' | sed -e 's/[[:space:]]\+/ /g' -e 's/^ //g' -e 's/ $//g')
+                    log "DEBUG" "Decoded base64 agent_key to: $decoded"
+                    if parse_client_key "$decoded"; then
+                        agent_id=$(echo "$decoded" | awk '{print $1}')
+                        agent_name=$(echo "$decoded" | awk '{print $2}')
+                        agent_ip=$(echo "$decoded" | awk '{print $3}')
+                        agent_key=$(echo "$decoded" | awk '{print $4}')
+                    else
+                        log "ERROR" "Agent ID is required when providing agent key (decoded content invalid)"
+                        return 1
+                    fi
+                else
+                    log "ERROR" "Agent ID is required when providing agent key"
+                    return 1
+                fi
+            else
+                log "ERROR" "Agent ID is required when providing agent key"
+                return 1
+            fi
         fi
     fi
     
@@ -1164,6 +1634,7 @@ COMMANDS:
     status                          Show agent status
     logs [lines] [follow]           Show agent logs (default: 50 lines)
     health                          Run health check
+    health-check-full               Run comprehensive health check with fault tolerance
     test-connection                 Test connectivity to manager
     backup                          Backup configuration
     restore <backup_path>           Restore configuration from backup
@@ -1216,18 +1687,73 @@ version() {
 
 # Main function
 main() {
-    # Always ensure script runs with root privileges
-    if [[ $EUID -ne 0 ]]; then
-        echo "Monitoring Agent requires elevated privileges. Restarting with sudo..."
-        # Preserve LD_PRELOAD environment variable if set
-        if [[ -n "${LD_PRELOAD:-}" ]]; then
-            exec sudo LD_PRELOAD="$LD_PRELOAD" "$0" "$@"
-        else
-            exec sudo "$0" "$@"
-        fi
+# Auto-installation and production readiness setup
+setup_production_environment() {
+    # Ensure systemd service is properly installed
+    local service_file="/etc/systemd/system/monitoring-agent.service"
+    local current_service="${AGENT_HOME}/monitoring-agent.service"
+    
+    if [[ -f "$current_service" && ! -f "$service_file" ]]; then
+        log "INFO" "Installing systemd service for auto-startup..."
+        cp "$current_service" "$service_file"
+        systemctl daemon-reload
+        systemctl enable monitoring-agent.service
+        log "INFO" "Service installed and enabled for auto-startup"
     fi
+    
+    # Fix permission issues automatically
+    if [[ -f "${AGENT_HOME}/etc/ossec.conf" ]]; then
+        chown monitoring:monitoring "${AGENT_HOME}/etc/ossec.conf" 2>/dev/null || true
+        chmod 644 "${AGENT_HOME}/etc/ossec.conf" 2>/dev/null || true
+    fi
+    
+    # Ensure watchdog system is set up
+    local watchdog_service="/etc/systemd/system/monitoring-agent-watchdog.service"
+    if [[ ! -f "$watchdog_service" && -f "${AGENT_HOME}/scripts/monitoring-watchdog.sh" ]]; then
+        create_watchdog_service
+    fi
+}
 
-    arg=$2
+create_watchdog_service() {
+    local watchdog_service="/etc/systemd/system/monitoring-agent-watchdog.service"
+    
+    cat > "$watchdog_service" << 'EOF'
+[Unit]
+Description=Monitoring Agent Watchdog
+After=monitoring-agent.service
+Wants=monitoring-agent.service
+PartOf=monitoring-agent.service
+
+[Service]
+Type=simple
+ExecStart=/home/anandhu/monitor/scripts/monitoring-watchdog.sh
+Restart=always
+RestartSec=10
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable monitoring-agent-watchdog.service
+    log "INFO" "Watchdog service created and enabled"
+}
+
+# Always ensure script runs with root privileges
+if [[ $EUID -ne 0 ]]; then
+    echo "Monitoring Agent requires elevated privileges. Restarting with sudo..."
+    # Preserve LD_PRELOAD environment variable if set
+    if [[ -n "${LD_PRELOAD:-}" ]]; then
+        exec sudo LD_PRELOAD="$LD_PRELOAD" "$0" "$@"
+    else
+        exec sudo "$0" "$@"
+    fi
+fi
+
+# Auto-setup production environment on any execution
+setup_production_environment    arg=$2
 
     case "$1" in
     start)
@@ -1235,6 +1761,23 @@ main() {
         lock
         start_agent
         unlock
+        ;;
+    start-service)
+        # Special mode for systemd exec service type - starts and stays in foreground
+        testconfig
+        lock
+        start_agent
+        unlock
+        # Stay in foreground to maintain systemd service
+        echo "[INFO] Monitoring Agent running in service mode..."
+        while true; do
+            sleep 30
+            # Basic health check - if main daemon dies, exit to trigger restart
+            if ! pgrep -f "monitoring-agentd" > /dev/null; then
+                log "ERROR" "Main daemon died, exiting service to trigger restart"
+                exit 1
+            fi
+        done
         ;;
     stop)
         lock
@@ -1269,6 +1812,23 @@ main() {
         ;;
     health)
         health_check
+        ;;
+    health-check)
+        health_check
+        ;;
+    health-check-full)
+        health_check_with_fault_tolerance
+        ;;
+    test-config)
+        testconfig
+        ;;
+    restart-process)
+        if [[ $# -lt 2 ]]; then
+            log "ERROR" "Process name required for restart-process command"
+            usage
+            exit 1
+        fi
+        restart_single_process "$2"
         ;;
     test-connection)
         test_connection

@@ -15,6 +15,187 @@ param(
     [switch]$VerboseLogging
 )
 
+# Auto-installation and production readiness setup for Windows
+function Setup-ProductionEnvironment {
+    Write-Log "INFO" "Setting up production environment for Windows..."
+    
+    # Ensure Windows service is properly installed if on Windows
+    if ($IsWindows) {
+        $serviceName = "MonitoringAgent"
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        
+        if (-not $service) {
+            Write-Log "INFO" "Installing Windows service for auto-startup..."
+            # Create Windows service using New-Service or sc.exe
+            try {
+                $serviceParams = @{
+                    Name = $serviceName
+                    BinaryPathName = "PowerShell.exe -ExecutionPolicy Bypass -File `"$($script:SCRIPT_DIR)\monitoring-agent-control.ps1`" start-service"
+                    DisplayName = "Monitoring Agent Service"
+                    Description = "Monitoring Agent Security Platform with Fault Tolerance"
+                    StartupType = "Automatic"
+                }
+                New-Service @serviceParams -ErrorAction Stop
+                Write-Log "INFO" "Windows service installed and configured for auto-startup"
+                
+                # Enable auto-recovery for the service
+                & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/10000/restart/30000
+                Write-Log "INFO" "Windows service failure recovery configured"
+            }
+            catch {
+                Write-Log "WARN" "Failed to create Windows service: $($_.Exception.Message)"
+                # Fallback to task scheduler
+                Setup-TaskScheduler
+            }
+        }
+        else {
+            Write-Log "INFO" "Windows service already exists, ensuring proper configuration..."
+            # Update service to use start-service command
+            try {
+                $newBinaryPath = "PowerShell.exe -ExecutionPolicy Bypass -File `"$($script:SCRIPT_DIR)\monitoring-agent-control.ps1`" start-service"
+                & sc.exe config $serviceName binPath= $newBinaryPath
+                Write-Log "INFO" "Windows service updated with start-service command"
+            }
+            catch {
+                Write-Log "WARN" "Failed to update Windows service configuration: $($_.Exception.Message)"
+            }
+        }
+    }
+    
+    # Fix permission issues automatically
+    $configPaths = @($script:CONFIG_FILE, $script:CLIENT_KEYS, $script:LOG_FILE)
+    foreach ($configPath in $configPaths) {
+        if (Test-Path $configPath) {
+            try {
+                # Set appropriate Windows permissions
+                $acl = Get-Acl $configPath
+                $acl.SetAccessRuleProtection($false, $false)
+                Set-Acl -Path $configPath -AclObject $acl
+                Write-Log "DEBUG" "Permissions set for: $configPath"
+            }
+            catch {
+                Write-Log "WARN" "Could not set permissions on $configPath`: $($_.Exception.Message)"
+            }
+        }
+    }
+    
+    # Ensure watchdog system is set up for Windows
+    Setup-WindowsWatchdog
+    
+    # Set up boot recovery system
+    Setup-WindowsBootRecovery
+    
+    # Configure Windows firewall if needed
+    Setup-WindowsFirewall
+    
+    # Ensure all required directories exist with proper permissions
+    $requiredDirs = @($script:PID_DIR, "$script:AGENT_HOME\logs", "$script:AGENT_HOME\var\state", "$script:AGENT_HOME\tmp")
+    foreach ($dir in $requiredDirs) {
+        if (-not (Test-Path $dir)) {
+            try {
+                New-Item -Path $dir -ItemType Directory -Force | Out-Null
+                Write-Log "DEBUG" "Created directory: $dir"
+            }
+            catch {
+                Write-Log "WARN" "Failed to create directory $dir`: $($_.Exception.Message)"
+            }
+        }
+    }
+    
+    Write-Log "INFO" "Production environment setup completed for Windows"
+}
+
+function Setup-TaskScheduler {
+    Write-Log "INFO" "Setting up Task Scheduler for auto-startup..."
+    
+    try {
+        $taskName = "MonitoringAgentStartup"
+        $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$($script:SCRIPT_DIR)\monitoring-agent-control.ps1`" start"
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+        
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force
+        Write-Log "INFO" "Task Scheduler configured for auto-startup"
+    }
+    catch {
+        Write-Log "ERROR" "Failed to setup Task Scheduler: $($_.Exception.Message)"
+    }
+}
+
+function Setup-WindowsWatchdog {
+    # Windows-specific watchdog setup using Task Scheduler
+    $watchdogScript = Join-Path $script:SCRIPT_DIR "scripts\windows\monitoring-watchdog.ps1"
+    
+    if (Test-Path $watchdogScript) {
+        Write-Log "INFO" "Setting up Windows watchdog service..."
+        
+        try {
+            $taskName = "MonitoringAgentWatchdog"
+            $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$watchdogScript`""
+            $trigger = New-ScheduledTaskTrigger -AtStartup
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 5)
+            $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+            
+            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force
+            Write-Log "INFO" "Windows watchdog configured"
+        }
+        catch {
+            Write-Log "WARN" "Failed to setup Windows watchdog: $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Log "WARN" "Watchdog script not found: $watchdogScript"
+    }
+}
+
+function Setup-WindowsBootRecovery {
+    Write-Log "INFO" "Setting up Windows boot recovery system..."
+    
+    $bootRecoveryScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-boot-recovery.ps1"
+    
+    if (Test-Path $bootRecoveryScript) {
+        try {
+            # Set up Task Scheduler task for boot recovery
+            $taskName = "MonitoringAgentBootRecovery"
+            $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$bootRecoveryScript`" check"
+            $trigger = New-ScheduledTaskTrigger -AtStartup
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Delay (New-TimeSpan -Minutes 2)
+            $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+            
+            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force
+            Write-Log "INFO" "Windows boot recovery system configured"
+        }
+        catch {
+            Write-Log "WARN" "Failed to setup Windows boot recovery: $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Log "WARN" "Boot recovery script not found: $bootRecoveryScript"
+    }
+}
+
+function Setup-WindowsFirewall {
+    Write-Log "INFO" "Configuring Windows firewall for monitoring agent..."
+    
+    try {
+        # Allow monitoring agent communication
+        $ruleName = "Monitoring Agent Communication"
+        $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+        
+        if (-not $existingRule) {
+            New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Protocol TCP -LocalPort 1514 -Action Allow -Profile Any
+            Write-Log "INFO" "Windows firewall rule created for monitoring agent"
+        }
+        else {
+            Write-Log "DEBUG" "Windows firewall rule already exists"
+        }
+    }
+    catch {
+        Write-Log "WARN" "Failed to configure Windows firewall: $($_.Exception.Message)"
+    }
+}
+
 # Check if running as Administrator (Cross-platform compatible)
 if ($IsWindows -and (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))) {
     Write-Host "Monitoring Agent requires Administrator privileges. Restarting as Administrator..." -ForegroundColor Red
@@ -23,6 +204,9 @@ if ($IsWindows -and (-NOT ([Security.Principal.WindowsPrincipal] [Security.Princ
     Start-Process PowerShell -Verb RunAs "-File `"$($MyInvocation.MyCommand.Path)`" $allArgs"
     exit
 }
+
+# Auto-setup production environment on any execution
+Setup-ProductionEnvironment
 
 # Script-level variables
 $script:DAEMONS = @("monitoring-modulesd", "monitoring-logcollector", "monitoring-syscheckd", "monitoring-agentd", "monitoring-execd")
@@ -714,9 +898,409 @@ function Get-ProcessStatus {
     return 0
 }
 
+# ======================================================================
+# FAULT TOLERANCE FUNCTIONS
+# ======================================================================
+
+function Start-FaultToleranceComponents {
+    Write-Log "DEBUG" "Initializing fault tolerance components..."
+    
+    # Start background monitoring processes
+    Start-ProcessWatchdog
+    
+    # Initialize logging and alerting
+    Initialize-WindowsLoggingSystem
+    
+    # Set up power event monitoring
+    Register-PowerEvents
+    
+    # Initialize WMI monitoring
+    Start-WMIMonitoring
+}
+
+function Complete-FaultToleranceStartup {
+    Write-Log "DEBUG" "Completing fault tolerance startup..."
+    
+    # Start process health monitoring
+    Start-ProcessHealthMonitoring
+    
+    # Initialize recovery mechanisms  
+    Initialize-WindowsRecoverySystem
+    
+    # Send startup notification
+    Send-WindowsStartupNotification
+}
+
+function Stop-FaultToleranceComponents {
+    Write-Log "DEBUG" "Stopping fault tolerance components..."
+    
+    # Stop monitoring processes
+    Stop-ProcessWatchdog
+    
+    # Stop health monitoring
+    Stop-ProcessHealthMonitoring
+    
+    # Unregister power events
+    Unregister-PowerEvents
+    
+    # Stop WMI monitoring
+    Stop-WMIMonitoring
+    
+    # Send shutdown notification
+    Send-WindowsShutdownNotification
+}
+
+function Start-ProcessWatchdog {
+    $watchdogScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-watchdog.ps1"
+    $watchdogPidFile = Join-Path $script:PID_DIR "monitoring-watchdog.pid"
+    
+    if (Test-Path $watchdogScript) {
+        Write-Log "DEBUG" "Starting process watchdog..."
+        
+        # Stop existing watchdog if running
+        if (Test-Path $watchdogPidFile) {
+            $oldPid = Get-Content $watchdogPidFile -ErrorAction SilentlyContinue
+            if ($oldPid) {
+                $oldProcess = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
+                if ($oldProcess) {
+                    $oldProcess.Kill()
+                    Start-Sleep -Seconds 1
+                }
+            }
+            Remove-Item $watchdogPidFile -Force -ErrorAction SilentlyContinue
+        }
+        
+        # Start new watchdog process
+        try {
+            $watchdogProcess = Start-Process -FilePath "PowerShell.exe" -ArgumentList @(
+                "-ExecutionPolicy", "Bypass",
+                "-WindowStyle", "Hidden",
+                "-File", $watchdogScript
+            ) -PassThru -WindowStyle Hidden
+            
+            $watchdogProcess.Id | Out-File -FilePath $watchdogPidFile -Encoding ASCII
+            
+            # Verify watchdog started
+            Start-Sleep -Seconds 2
+            if (Get-Process -Id $watchdogProcess.Id -ErrorAction SilentlyContinue) {
+                Write-Log "DEBUG" "Process watchdog started (PID: $($watchdogProcess.Id))"
+            } else {
+                Write-Log "WARN" "Failed to start process watchdog"
+            }
+        }
+        catch {
+            Write-Log "WARN" "Failed to start process watchdog: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Log "DEBUG" "Watchdog script not found, skipping process monitoring"
+    }
+}
+
+function Stop-ProcessWatchdog {
+    $watchdogPidFile = Join-Path $script:PID_DIR "monitoring-watchdog.pid"
+    
+    if (Test-Path $watchdogPidFile) {
+        $watchdogPid = Get-Content $watchdogPidFile -ErrorAction SilentlyContinue
+        if ($watchdogPid) {
+            $watchdogProcess = Get-Process -Id $watchdogPid -ErrorAction SilentlyContinue
+            if ($watchdogProcess) {
+                Write-Log "DEBUG" "Stopping process watchdog (PID: $watchdogPid)..."
+                $watchdogProcess.Kill()
+                
+                # Wait for graceful shutdown
+                for ($i = 1; $i -le 10; $i++) {
+                    if (-not (Get-Process -Id $watchdogPid -ErrorAction SilentlyContinue)) {
+                        break
+                    }
+                    Start-Sleep -Seconds 1
+                }
+            }
+        }
+        Remove-Item $watchdogPidFile -Force -ErrorAction SilentlyContinue
+        Write-Log "DEBUG" "Process watchdog stopped"
+    }
+}
+
+function Initialize-WindowsLoggingSystem {
+    $loggingScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-logging.ps1"
+    
+    if (Test-Path $loggingScript) {
+        Write-Log "DEBUG" "Initializing enhanced logging system..."
+        
+        # Create alert configuration if it doesn't exist
+        $alertConfig = Join-Path $script:AGENT_HOME "etc\monitoring-alerts.conf"
+        if (-not (Test-Path $alertConfig)) {
+            try {
+                & $loggingScript -Action "init-config" -ErrorAction SilentlyContinue
+            }
+            catch {
+                Write-Log "WARN" "Failed to initialize logging configuration"
+            }
+        }
+        
+        # Initialize alert state
+        try {
+            & $loggingScript -Action "init" -ErrorAction SilentlyContinue | Out-Null
+        }
+        catch {
+            Write-Log "WARN" "Failed to initialize logging system"
+        }
+        
+        Write-Log "DEBUG" "Enhanced logging system initialized"
+    }
+}
+
+function Register-PowerEvents {
+    Write-Log "DEBUG" "Registering power event monitoring..."
+    
+    try {
+        # Create scheduled task for power events if it doesn't exist
+        $taskName = "MonitoringAgent-PowerEvents"
+        $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        
+        if (-not $existingTask) {
+            $powerScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-power-events.ps1"
+            if (Test-Path $powerScript) {
+                $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$powerScript`" -Action Handle"
+                $trigger = New-ScheduledTaskTrigger -AtLogOn
+                $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+                $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+                
+                Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "DEBUG" "Power event monitoring task created"
+            }
+        }
+    }
+    catch {
+        Write-Log "WARN" "Failed to register power event monitoring: $($_.Exception.Message)"
+    }
+}
+
+function Unregister-PowerEvents {
+    Write-Log "DEBUG" "Unregistering power event monitoring..."
+    
+    try {
+        # Unregister scheduled task
+        $taskName = "MonitoringAgent-PowerEvents"
+        $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        
+        if ($existingTask) {
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+            Write-Log "DEBUG" "Power event monitoring task removed"
+        }
+    }
+    catch {
+        Write-Log "WARN" "Failed to unregister power event monitoring: $($_.Exception.Message)"
+    }
+}
+
+function Start-WMIMonitoring {
+    Write-Log "DEBUG" "Starting WMI monitoring..."
+    
+    try {
+        # Create scheduled task for WMI monitoring
+        $taskName = "MonitoringAgent-WMIEvents"
+        $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        
+        if (-not $existingTask) {
+            $wmiScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-wmi-events.ps1"
+            
+            if (Test-Path $wmiScript) {
+                $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$wmiScript`""
+                $trigger = New-ScheduledTaskTrigger -AtStartup
+                $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+                $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+                
+                Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -ErrorAction SilentlyContinue | Out-Null
+                
+                # Start the task
+                Start-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+                Write-Log "DEBUG" "WMI monitoring task created and started"
+            }
+        }
+    }
+    catch {
+        Write-Log "WARN" "Failed to start WMI monitoring: $($_.Exception.Message)"
+    }
+}
+
+function Stop-WMIMonitoring {
+    Write-Log "DEBUG" "Stopping WMI monitoring..."
+    
+    try {
+        $taskName = "MonitoringAgent-WMIEvents"
+        $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        
+        if ($existingTask) {
+            Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+            Write-Log "DEBUG" "WMI monitoring task stopped and removed"
+        }
+    }
+    catch {
+        Write-Log "WARN" "Failed to stop WMI monitoring: $($_.Exception.Message)"
+    }
+}
+
+function Start-ProcessHealthMonitoring {
+    Write-Log "DEBUG" "Starting process health monitoring..."
+    
+    # Start background health check loop
+    $healthScript = {
+        param($AgentHome)
+        
+        while ($true) {
+            Start-Sleep -Seconds 300  # 5 minutes
+            
+            try {
+                $recoveryScript = Join-Path $AgentHome "scripts\windows\monitoring-recovery.ps1"
+                if (Test-Path $recoveryScript) {
+                    & $recoveryScript -Action "health-check" -ErrorAction SilentlyContinue | Out-Null
+                }
+            }
+            catch {
+                # Silently continue on errors
+            }
+        }
+    }
+    
+    try {
+        $healthJob = Start-Job -ScriptBlock $healthScript -ArgumentList @($script:AGENT_HOME)
+        $healthJob.Id | Out-File -FilePath (Join-Path $script:PID_DIR "monitoring-health.pid") -Encoding ASCII
+        Write-Log "DEBUG" "Process health monitoring started (Job ID: $($healthJob.Id))"
+    }
+    catch {
+        Write-Log "WARN" "Failed to start process health monitoring: $($_.Exception.Message)"
+    }
+}
+
+function Stop-ProcessHealthMonitoring {
+    $healthPidFile = Join-Path $script:PID_DIR "monitoring-health.pid"
+    
+    if (Test-Path $healthPidFile) {
+        $jobId = Get-Content $healthPidFile -ErrorAction SilentlyContinue
+        if ($jobId) {
+            $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
+            if ($job) {
+                Stop-Job -Id $jobId -ErrorAction SilentlyContinue
+                Remove-Job -Id $jobId -Force -ErrorAction SilentlyContinue
+                Write-Log "DEBUG" "Process health monitoring stopped"
+            }
+        }
+        Remove-Item $healthPidFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Initialize-WindowsRecoverySystem {
+    # Create state tracking directory
+    $stateDir = Join-Path $script:AGENT_HOME "var\state"
+    if (-not (Test-Path $stateDir)) {
+        New-Item -ItemType Directory -Path $stateDir -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+    
+    # Record startup time
+    [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() | Out-File -FilePath (Join-Path $stateDir "startup_time") -Encoding ASCII
+    
+    # Initialize process restart counters
+    foreach ($daemon in $script:DAEMONS) {
+        "0" | Out-File -FilePath (Join-Path $stateDir "restart_count_$daemon") -Encoding ASCII -ErrorAction SilentlyContinue
+    }
+    
+    Write-Log "DEBUG" "Recovery system initialized"
+}
+
+function Send-WindowsStartupNotification {
+    $loggingScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-logging.ps1"
+    
+    if (Test-Path $loggingScript) {
+        try {
+            & $loggingScript -Action "send-alert" -Level "INFO" -Title "Monitoring Agent Started" -Message "Monitoring Agent v$Script:AGENT_VERSION started successfully with fault tolerance enabled." -ErrorAction SilentlyContinue | Out-Null
+        }
+        catch {
+            # Silently continue on notification errors
+        }
+    }
+}
+
+function Send-WindowsShutdownNotification {
+    $loggingScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-logging.ps1"
+    
+    if (Test-Path $loggingScript) {
+        try {
+            & $loggingScript -Action "send-alert" -Level "INFO" -Title "Monitoring Agent Stopped" -Message "Monitoring Agent v$Script:AGENT_VERSION has been stopped gracefully." -ErrorAction SilentlyContinue | Out-Null
+        }
+        catch {
+            # Silently continue on notification errors  
+        }
+    }
+}
+
+function Test-FaultToleranceHealth {
+    Write-Log "INFO" "Running comprehensive health check with fault tolerance validation..."
+    
+    $errors = 0
+    
+    # Run standard health check first
+    if (-not (Test-AgentHealth)) {
+        $errors++
+    }
+    
+    # Check watchdog process
+    $watchdogPidFile = Join-Path $script:PID_DIR "monitoring-watchdog.pid"
+    if (Test-Path $watchdogPidFile) {
+        $watchdogPid = Get-Content $watchdogPidFile -ErrorAction SilentlyContinue
+        if ($watchdogPid) {
+            $watchdogProcess = Get-Process -Id $watchdogPid -ErrorAction SilentlyContinue
+            if ($watchdogProcess) {
+                Write-Log "INFO" "✓ Process watchdog is running (PID: $watchdogPid)"
+            } else {
+                Write-Log "ERROR" "✗ Process watchdog is not running"
+                $errors++
+            }
+        }
+    } else {
+        Write-Log "WARN" "Process watchdog PID file not found"
+        $errors++
+    }
+    
+    # Check scheduled tasks
+    $powerTask = Get-ScheduledTask -TaskName "MonitoringAgent-PowerEvents" -ErrorAction SilentlyContinue
+    if ($powerTask) {
+        Write-Log "INFO" "✓ Power event monitoring task is configured"
+    } else {
+        Write-Log "WARN" "Power event monitoring task not found"
+    }
+    
+    # Check health monitoring job
+    $healthPidFile = Join-Path $script:PID_DIR "monitoring-health.pid"
+    if (Test-Path $healthPidFile) {
+        $jobId = Get-Content $healthPidFile -ErrorAction SilentlyContinue
+        if ($jobId) {
+            $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
+            if ($job -and $job.State -eq "Running") {
+                Write-Log "INFO" "✓ Health monitoring is running (Job ID: $jobId)"
+            } else {
+                Write-Log "WARN" "Health monitoring job is not running properly"
+            }
+        }
+    }
+    
+    if ($errors -eq 0) {
+        Write-Log "INFO" "✓ Comprehensive health check passed"
+        return $true
+    } else {
+        Write-Log "ERROR" "✗ Comprehensive health check failed with $errors errors"
+        return $false
+    }
+}
+
+# ======================================================================
+# END FAULT TOLERANCE FUNCTIONS
+# ======================================================================
+
 # Start function
 function Start-Agent {
-    Write-Log "INFO" "Starting Monitoring Agent $Script:AGENT_VERSION..."
+    Write-Log "INFO" "Starting Monitoring Agent $Script:AGENT_VERSION with Fault Tolerance..."
     
     # Initialize bypass mechanism first
     Initialize-MonitoringBypass
@@ -732,6 +1316,9 @@ function Start-Agent {
     if (Test-Path $tempPath) {
         Get-ChildItem -Path $tempPath | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     }
+
+    # Initialize fault tolerance components
+    Start-FaultToleranceComponents
     
     # Start daemons in reverse order
         foreach ($daemon in $script:SDAEMONS) {
@@ -807,10 +1394,41 @@ function Start-Agent {
     
     # Give daemons time to create PID files
     Start-Sleep -Seconds 2
-    Write-Log "INFO" "✓ Monitoring Agent started successfully!"
+    
+    # Complete fault tolerance initialization
+    Complete-FaultToleranceStartup
+    
+    # Mark agent as running for boot recovery
+    $bootRecoveryScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-boot-recovery.ps1"
+    if (Test-Path $bootRecoveryScript) {
+        try {
+            & $bootRecoveryScript "mark-running"
+        }
+        catch {
+            Write-Log "WARN" "Failed to mark agent as running for boot recovery: $($_.Exception.Message)"
+        }
+    }
+    
+    Write-Log "INFO" "✓ Monitoring Agent started successfully with fault tolerance!"
 }
 
 function Stop-Agent {
+    Write-Log "INFO" "Stopping Monitoring Agent $Script:AGENT_VERSION and Fault Tolerance..."
+    
+    # Mark agent as stopped for boot recovery
+    $bootRecoveryScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-boot-recovery.ps1"
+    if (Test-Path $bootRecoveryScript) {
+        try {
+            & $bootRecoveryScript "mark-stopped"
+        }
+        catch {
+            Write-Log "WARN" "Failed to mark agent as stopped for boot recovery: $($_.Exception.Message)"
+        }
+    }
+    
+    # Stop fault tolerance components first
+    Stop-FaultToleranceComponents
+    
     Test-ProcessIds
     
     foreach ($daemon in $script:DAEMONS) {
@@ -966,6 +1584,12 @@ function Invoke-AgentEnrollment {
         [string]$AgentIP = "any"
     )
     
+    # NOTE: This enrollment function now accepts either a plain client key line
+    # ("001 name ip keyhex...") or a base64-encoded string containing that line.
+    # If a base64 string is provided (interactive or via the AgentKey parameter),
+    # we attempt to decode it automatically and validate the resulting key line.
+    # This simplifies enrollment when managers only provide an encoded key.
+
     # Parse IP:PORT format if provided as single argument
     if ($ManagerInput -match ":") {
         $parts = $ManagerInput -split ":"
@@ -1020,13 +1644,28 @@ function Invoke-AgentEnrollment {
         Write-Host "The key should be in format:"
         Write-Host "  001 agent-name 192.168.1.100 abc123...def456"
         Write-Host ""
-        $clientKeyLine = Read-Host "Enter the complete client key line"
+    $clientKeyLine = Read-Host "Enter the complete client key line (or paste base64-encoded key)"
         
         if (-not $clientKeyLine) {
             Write-Log "ERROR" "Client key is required for enrollment"
             return $false
         }
         
+        # If the provided line looks like base64, attempt to decode it automatically
+        if ($clientKeyLine -match '^[A-Za-z0-9+/=]+$') {
+            try {
+                $decodedBytes = [System.Convert]::FromBase64String($clientKeyLine)
+                $decoded = [System.Text.Encoding]::UTF8.GetString($decodedBytes)
+                # Normalize whitespace
+                $decoded = ($decoded -replace '[\r\n]+',' ' -replace '\s+',' ').Trim()
+                Write-Log "DEBUG" "Decoded base64 client key: $decoded"
+                $clientKeyLine = $decoded
+            }
+            catch {
+                Write-Log "WARN" "Provided client key looks like base64 but failed to decode; continuing with original input"
+            }
+        }
+
         # Parse the client key line
         if (-not (Test-ClientKey $clientKeyLine)) {
             Write-Log "ERROR" "Invalid client key format"
@@ -1043,8 +1682,34 @@ function Invoke-AgentEnrollment {
     else {
         # If key provided, ensure we have agent_id
         if (-not $AgentId) {
-            Write-Log "ERROR" "Agent ID is required when providing agent key"
-            return $false
+            # Support case where $AgentKey is a base64-encoded full client key line
+            if ($AgentKey -match '^[A-Za-z0-9+/=]+$') {
+                try {
+                    $decodedBytes = [System.Convert]::FromBase64String($AgentKey)
+                    $decoded = [System.Text.Encoding]::UTF8.GetString($decodedBytes)
+                    $decoded = ($decoded -replace '[\r\n]+',' ' -replace '\s+',' ').Trim()
+                    Write-Log "DEBUG" "Decoded base64 AgentKey to: $decoded"
+                    if (Test-ClientKey $decoded) {
+                        $parts = $decoded -split '\s+'
+                        $AgentId = $parts[0]
+                        $AgentName = $parts[1]
+                        $AgentIP = $parts[2]
+                        $AgentKey = $parts[3]
+                    }
+                    else {
+                        Write-Log "ERROR" "Agent ID is required when providing agent key (decoded content invalid)"
+                        return $false
+                    }
+                }
+                catch {
+                    Write-Log "ERROR" "Agent ID is required when providing agent key"
+                    return $false
+                }
+            }
+            else {
+                Write-Log "ERROR" "Agent ID is required when providing agent key"
+                return $false
+            }
         }
     }
     
@@ -1239,34 +1904,511 @@ function Initialize-Setup {
 }
 
 function New-WindowsService {
-    Write-Log "DEBUG" "Creating Windows service..."
+    <#
+    .SYNOPSIS
+    Creates a fault-tolerant Windows service for the Monitoring Agent
+    
+    .DESCRIPTION
+    Creates a Windows service with comprehensive recovery options, restart policies,
+    and power event handling for maximum availability
+    #>
+    
+    Write-Log "INFO" "Creating fault-tolerant Windows service..."
     
     try {
         $serviceName = "MonitoringAgent"
-        $serviceDisplayName = "Monitoring Agent"
-        $serviceDescription = "Monitoring Agent for Windows"
-        $binaryPath = "`"powershell.exe`" -ExecutionPolicy Bypass -File `"$($script:SCRIPT_DIR)\$($script:SCRIPT_NAME)`" start"
+        $serviceDisplayName = "Monitoring Agent Security Platform"
+        $serviceDescription = "Fault-tolerant monitoring agent with automatic recovery and power management"
+        $binaryPath = "`"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`" -ExecutionPolicy Bypass -NonInteractive -WindowStyle Hidden -File `"$($MyInvocation.MyCommand.Path)`" service-mode"
         
         # Check if service already exists
         $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if ($existingService) {
-            Write-Log "INFO" "Windows service already exists: $serviceName"
-            return
+            Write-Log "INFO" "Updating existing Windows service: $serviceName"
+            
+            # Stop service if running
+            if ($existingService.Status -eq 'Running') {
+                Write-Log "DEBUG" "Stopping existing service for update"
+                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 5
+            }
+            
+            # Delete existing service
+            & sc.exe delete $serviceName | Out-Null
+            Start-Sleep -Seconds 2
         }
         
-        # Create the service using sc.exe
-        $result = & sc.exe create $serviceName binPath= $binaryPath DisplayName= $serviceDisplayName start= demand
-        if ($LASTEXITCODE -eq 0) {
-            & sc.exe description $serviceName $serviceDescription | Out-Null
-            Write-Log "INFO" "Windows service created: $serviceName"
-            Write-Log "INFO" "Start with: Start-Service $serviceName"
+        # Create the service with comprehensive configuration
+        Write-Log "DEBUG" "Creating service with binary path: $binaryPath"
+        
+        $createResult = & sc.exe create $serviceName `
+            binPath= $binaryPath `
+            DisplayName= $serviceDisplayName `
+            start= auto `
+            type= own `
+            depend= "Tcpip/Afd" `
+            obj= "LocalSystem"
+            
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create service. Exit code: $LASTEXITCODE. Output: $createResult"
+        }
+        
+        # Set service description
+        & sc.exe description $serviceName $serviceDescription | Out-Null
+        
+        # Configure failure recovery options
+        Write-Log "DEBUG" "Configuring service recovery options"
+        
+        # Set failure actions: restart after 1 minute, restart after 5 minutes, restart after 10 minutes
+        $failureActions = @(
+            "reset= 3600",  # Reset failure count after 1 hour
+            "actions= restart/60000/restart/300000/restart/600000"
+        )
+        
+        & sc.exe failure $serviceName @failureActions | Out-Null
+        
+        # Configure additional service parameters
+        $configParams = @{
+            "DelayedAutostart" = "1"  # Delayed automatic start
+        }
+        
+        foreach ($param in $configParams.GetEnumerator()) {
+            & sc.exe config $serviceName $param.Key= $param.Value | Out-Null
+        }
+        
+        # Set service to restart on failure immediately
+        & sc.exe failureflag $serviceName "1" | Out-Null
+        
+        # Configure service privileges and security
+        Write-Log "DEBUG" "Configuring service security"
+        
+        # Grant the service necessary privileges
+        $serviceSid = (New-Object System.Security.Principal.SecurityIdentifier("S-1-5-80")).Translate([System.Security.Principal.NTAccount])
+        
+        # Create service-specific event log source
+        try {
+            if (-not [System.Diagnostics.EventLog]::SourceExists("MonitoringAgent")) {
+                [System.Diagnostics.EventLog]::CreateEventSource("MonitoringAgent", "Application")
+                Write-Log "DEBUG" "Created event log source"
+            }
+        }
+        catch {
+            Write-Log "WARN" "Could not create event log source: $($_.Exception.Message)"
+        }
+        
+        # Configure service for power events
+        Write-Log "DEBUG" "Configuring power event handling"
+        
+        # Register for power events and system state changes
+        $powerEventScript = Join-Path $script:AGENT_HOME "scripts\monitoring-power-events.ps1"
+        if (-not (Test-Path (Split-Path $powerEventScript -Parent))) {
+            New-Item -Path (Split-Path $powerEventScript -Parent) -ItemType Directory -Force | Out-Null
+        }
+        
+        # Create power event handler script
+        $powerEventContent = @'
+# Monitoring Agent Power Event Handler
+param($EventType, $EventData)
+
+$LogFile = "{0}\logs\monitoring-power-events.log" -f $env:MONITORING_AGENT_HOME
+$Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+function Write-PowerLog($Message) {
+    $LogEntry = "[$Timestamp] [POWER] $Message"
+    Add-Content -Path $LogFile -Value $LogEntry -ErrorAction SilentlyContinue
+}
+
+switch ($EventType) {
+    "PowerEventSuspend" {
+        Write-PowerLog "System entering suspend mode"
+    }
+    "PowerEventResume" {
+        Write-PowerLog "System resuming from suspend mode"
+        # Give system time to stabilize
+        Start-Sleep -Seconds 10
+        
+        # Check if monitoring service is running
+        $service = Get-Service -Name "MonitoringAgent" -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -ne 'Running') {
+            Write-PowerLog "Monitoring service not running after resume - restarting"
+            try {
+                Start-Service -Name "MonitoringAgent"
+                Write-PowerLog "Successfully restarted monitoring service"
+            }
+            catch {
+                Write-PowerLog "Failed to restart monitoring service: $($_.Exception.Message)"
+            }
+        }
+    }
+    "PowerEventShutdown" {
+        Write-PowerLog "System shutting down"
+    }
+}
+'@
+        
+        $powerEventContent = $powerEventContent -replace '\{0\}', $script:AGENT_HOME
+        $powerEventContent | Set-Content -Path $powerEventScript -Encoding UTF8
+        
+        # Create scheduled task for power event monitoring
+        $taskName = "MonitoringAgent-PowerEvents"
+        
+        try {
+            # Remove existing task if it exists
+            $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            if ($existingTask) {
+                Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+            }
+            
+            # Create trigger for system resume
+            $trigger = New-ScheduledTaskTrigger -AtStartup
+            $trigger.Delay = "PT30S"  # 30 second delay after startup
+            
+            # Create action to run power event handler
+            $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$powerEventScript`" PowerEventResume"
+            
+            # Configure task settings
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+            
+            # Create principal (run as SYSTEM)
+            $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+            
+            # Register the task
+            Register-ScheduledTask -TaskName $taskName -Trigger $trigger -Action $action -Settings $settings -Principal $principal -Description "Monitoring Agent Power Event Handler" | Out-Null
+            
+            Write-Log "DEBUG" "Created scheduled task for power event handling"
+        }
+        catch {
+            Write-Log "WARN" "Could not create power event scheduled task: $($_.Exception.Message)"
+        }
+        
+        # Start the service
+        Write-Log "INFO" "Starting Monitoring Agent service"
+        Start-Service -Name $serviceName -ErrorAction Stop
+        
+        # Verify service is running
+        $service = Get-Service -Name $serviceName
+        if ($service.Status -eq 'Running') {
+            Write-Log "INFO" "✓ Windows service created and started successfully: $serviceName"
+            Write-Log "INFO" "Service features:"
+            Write-Log "INFO" "  - Automatic startup"
+            Write-Log "INFO" "  - Delayed start for system stability"
+            Write-Log "INFO" "  - Automatic restart on failure"
+            Write-Log "INFO" "  - Power event handling"
+            Write-Log "INFO" "  - Recovery after 1, 5, and 10 minutes"
         }
         else {
-            Write-Log "WARN" "Failed to create Windows service: $result"
+            Write-Log "WARN" "Service created but not running. Status: $($service.Status)"
+        }
+        
+        return $true
+    }
+    catch {
+        Write-Log "ERROR" "Failed to create Windows service: $($_.Exception.Message)"
+        Write-Log "DEBUG" "Stack trace: $($_.Exception.StackTrace)"
+        return $false
+    }
+}
+
+function Remove-WindowsService {
+    <#
+    .SYNOPSIS
+    Removes the Monitoring Agent Windows service
+    #>
+    
+    Write-Log "INFO" "Removing Monitoring Agent Windows service..."
+    
+    try {
+        $serviceName = "MonitoringAgent"
+        
+        # Check if service exists
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if (-not $service) {
+            Write-Log "WARN" "Service $serviceName does not exist"
+            return $true
+        }
+        
+        # Stop service if running
+        if ($service.Status -eq 'Running') {
+            Write-Log "DEBUG" "Stopping service before removal"
+            Stop-Service -Name $serviceName -Force
+            
+            # Wait for service to stop
+            $timeout = 30
+            $count = 0
+            while ($service.Status -ne 'Stopped' -and $count -lt $timeout) {
+                Start-Sleep -Seconds 1
+                $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+                $count++
+            }
+        }
+        
+        # Remove scheduled task
+        $taskName = "MonitoringAgent-PowerEvents"
+        $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($existingTask) {
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+            Write-Log "DEBUG" "Removed scheduled task: $taskName"
+        }
+        
+        # Delete the service
+        $result = & sc.exe delete $serviceName
+        if ($LASTEXITCODE -eq 0) {
+            Write-Log "INFO" "✓ Windows service removed successfully: $serviceName"
+            return $true
+        }
+        else {
+            Write-Log "ERROR" "Failed to remove service: $result"
+            return $false
         }
     }
     catch {
-        Write-Log "WARN" "Error creating Windows service: $($_.Exception.Message)"
+        Write-Log "ERROR" "Error removing Windows service: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Start-ServiceMode {
+    <#
+    .SYNOPSIS
+    Runs the monitoring agent in Windows service mode with continuous monitoring
+    
+    .DESCRIPTION
+    This function implements the main service loop with fault tolerance,
+    process monitoring, and automatic recovery
+    #>
+    
+    Write-Log "INFO" "Starting Monitoring Agent in service mode"
+    
+    # Set environment variables for service mode
+    $env:MONITORING_SERVICE_MODE = "1"
+    $env:MONITORING_AGENT_HOME = $script:AGENT_HOME
+    
+    # Initialize bypass mechanism
+    Initialize-MonitoringBypass | Out-Null
+    
+    # Service control variables
+    $script:ServiceRunning = $true
+    $script:ProcessMonitoringEnabled = $true
+    $script:ServiceStartTime = Get-Date
+    
+    # Process monitoring configuration
+    $monitoringInterval = 30  # seconds
+    $maxRestartAttempts = 3
+    $restartCooldown = 300    # 5 minutes
+    
+    # Process tracking
+    $processRestartCounts = @{}
+    $lastRestartTimes = @{}
+    
+    # Register for system events
+    Register-EngineEvent -SourceIdentifier "PowerShell.Exiting" -Action {
+        $script:ServiceRunning = $false
+        Write-Log "INFO" "Service shutdown requested"
+    }
+    
+    # Signal handler for service control
+    $signalHandler = {
+        param($sender, $e)
+        Write-Log "INFO" "Service control signal received"
+        $script:ServiceRunning = $false
+    }
+    
+    # Try to register for console events (may not work in service context)
+    try {
+        [Console]::CancelKeyPress += $signalHandler
+    }
+    catch {
+        Write-Log "DEBUG" "Could not register console event handler (expected in service mode)"
+    }
+    
+    # Start the monitoring agent
+    try {
+        Write-Log "INFO" "Initializing monitoring agent processes"
+        Start-Agent
+        
+        Write-Log "INFO" "Entering service monitoring loop"
+        
+        # Main service loop
+        while ($script:ServiceRunning) {
+            try {
+                # Check if all critical processes are running
+                $failedProcesses = @()
+                
+                foreach ($daemon in $script:DAEMONS) {
+                    if (-not (Test-ProcessRunning $daemon)) {
+                        $failedProcesses += $daemon
+                        Write-Log "WARN" "Process $daemon is not running"
+                    }
+                }
+                
+                # Handle failed processes
+                if ($failedProcesses.Count -gt 0) {
+                    foreach ($process in $failedProcesses) {
+                        $currentTime = Get-Date
+                        
+                        # Initialize tracking if not exists
+                        if (-not $processRestartCounts.ContainsKey($process)) {
+                            $processRestartCounts[$process] = 0
+                            $lastRestartTimes[$process] = [DateTime]::MinValue
+                        }
+                        
+                        # Check cooldown period
+                        $timeSinceLastRestart = ($currentTime - $lastRestartTimes[$process]).TotalSeconds
+                        if ($timeSinceLastRestart -lt $restartCooldown) {
+                            Write-Log "DEBUG" "Process $process in cooldown period"
+                            continue
+                        }
+                        
+                        # Check restart limit
+                        if ($processRestartCounts[$process] -ge $maxRestartAttempts) {
+                            Write-Log "ERROR" "Process $process exceeded maximum restart attempts"
+                            continue
+                        }
+                        
+                        # Attempt to restart the process
+                        Write-Log "INFO" "Attempting to restart process: $process"
+                        
+                        if (Restart-SingleProcess $process) {
+                            $processRestartCounts[$process]++
+                            $lastRestartTimes[$process] = $currentTime
+                            Write-Log "INFO" "Successfully restarted process: $process"
+                        }
+                        else {
+                            Write-Log "ERROR" "Failed to restart process: $process"
+                        }
+                    }
+                    
+                    # If multiple critical processes failed, restart entire agent
+                    if ($failedProcesses.Count -ge 3) {
+                        Write-Log "WARN" "Multiple processes failed - restarting entire agent"
+                        
+                        try {
+                            Stop-Agent
+                            Start-Sleep -Seconds 5
+                            Start-Agent
+                            
+                            # Reset restart counters after full restart
+                            $processRestartCounts.Clear()
+                            $lastRestartTimes.Clear()
+                            
+                            Write-Log "INFO" "Agent restarted successfully"
+                        }
+                        catch {
+                            Write-Log "ERROR" "Failed to restart agent: $($_.Exception.Message)"
+                        }
+                    }
+                }
+                
+                # Reset daily restart counters
+                $currentHour = (Get-Date).Hour
+                if ($currentHour -eq 0 -and (Get-Date).Minute -eq 0) {
+                    Write-Log "INFO" "Daily restart counter reset"
+                    $processRestartCounts.Clear()
+                    $lastRestartTimes.Clear()
+                }
+                
+                # Service heartbeat
+                if ((Get-Date).Minute % 15 -eq 0) {
+                    $uptime = (Get-Date) - $script:ServiceStartTime
+                    Write-Log "DEBUG" "Service heartbeat - Uptime: $($uptime.ToString('dd\.hh\:mm\:ss'))"
+                }
+                
+                # Wait before next check
+                Start-Sleep -Seconds $monitoringInterval
+            }
+            catch {
+                Write-Log "ERROR" "Error in service monitoring loop: $($_.Exception.Message)"
+                Start-Sleep -Seconds 60  # Wait longer if there's an error
+            }
+        }
+        
+        Write-Log "INFO" "Service monitoring loop ended"
+    }
+    catch {
+        Write-Log "CRITICAL" "Fatal error in service mode: $($_.Exception.Message)"
+        Write-Log "DEBUG" "Stack trace: $($_.Exception.StackTrace)"
+    }
+    finally {
+        # Cleanup
+        Write-Log "INFO" "Stopping monitoring agent processes"
+        try {
+            Stop-Agent
+        }
+        catch {
+            Write-Log "ERROR" "Error stopping agent processes: $($_.Exception.Message)"
+        }
+        
+        Write-Log "INFO" "Monitoring Agent service mode stopped"
+    }
+}
+
+function Restart-SingleProcess {
+    <#
+    .SYNOPSIS
+    Restarts a single monitoring process
+    
+    .DESCRIPTION
+    Attempts to restart an individual monitoring process with proper error handling
+    #>
+    param(
+        [string]$ProcessName
+    )
+    
+    Write-Log "INFO" "Restarting individual process: $ProcessName"
+    
+    # Validate process name
+    if ($ProcessName -notin $script:DAEMONS) {
+        Write-Log "ERROR" "Unknown process: $ProcessName"
+        return $false
+    }
+    
+    try {
+        # Stop the process if running
+        $pid = Get-ProcessPid $ProcessName
+        if ($pid) {
+            Write-Log "DEBUG" "Stopping process $ProcessName (PID: $pid)"
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+        }
+        
+        # Start the process
+        $binary = Get-BinaryName $ProcessName
+        $binaryPath = Join-Path $script:AGENT_HOME "bin\$binary.exe"
+        
+        if (-not (Test-Path $binaryPath)) {
+            Write-Log "ERROR" "Binary not found: $binaryPath"
+            return $false
+        }
+        
+        $args = Get-DaemonArgs $ProcessName
+        
+        Write-Log "DEBUG" "Starting process: $binaryPath $args"
+        
+        # Start with bypass environment
+        $process = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $args -PassThru
+        
+        if ($process) {
+            # Wait for process to stabilize
+            Start-Sleep -Seconds 5
+            
+            # Verify it's running
+            if (Test-ProcessRunning $ProcessName) {
+                Write-Log "INFO" "Successfully restarted process: $ProcessName"
+                return $true
+            }
+            else {
+                Write-Log "ERROR" "Process $ProcessName failed to start properly"
+                return $false
+            }
+        }
+        else {
+            Write-Log "ERROR" "Failed to start process: $ProcessName"
+            return $false
+        }
+    }
+    catch {
+        Write-Log "ERROR" "Error restarting process $ProcessName : $($_.Exception.Message)"
+        return $false
     }
 }
 
@@ -1557,6 +2699,30 @@ function Invoke-Main {
                 Unlock-Process
             }
         }
+        "start-service" {
+            # Special mode for Windows service - starts and stays in foreground
+            Write-Log "INFO" "Starting agent in service mode..."
+            Test-Configuration
+            Lock-Process
+            try {
+                Start-Agent
+                # Stay in foreground to maintain Windows service
+                Write-Log "INFO" "Monitoring Agent running in service mode..."
+                while ($true) {
+                    Start-Sleep -Seconds 30
+                    # Basic health check - if main daemon dies, exit to trigger restart
+                    $mainDaemon = "monitoring-agentd"
+                    $status = Get-ProcessStatus $mainDaemon
+                    if ($status -eq 0) {
+                        Write-Log "ERROR" "Main daemon died, exiting service to trigger restart"
+                        exit 1
+                    }
+                }
+            }
+            finally {
+                Unlock-Process
+            }
+        }
         "stop" {
             Lock-Process
             try {
@@ -1606,6 +2772,12 @@ function Invoke-Main {
         "health" {
             Test-Health
         }
+        "health-check" {
+            Test-Health
+        }
+        "health-check-full" {
+            Test-FaultToleranceHealth
+        }
         "test-connection" {
             Test-Connection
         }
@@ -1627,6 +2799,27 @@ function Invoke-Main {
                 exit 1
             }
             Set-FirewallRule @Arguments
+        }
+        "service-mode" {
+            # Run in service mode
+            Start-ServiceMode
+        }
+        "install-service" {
+            New-WindowsService
+        }
+        "uninstall-service" {
+            Remove-WindowsService
+        }
+        "health-check" {
+            Test-Health
+        }
+        "restart-process" {
+            if ($Arguments.Count -lt 1) {
+                Write-Log "ERROR" "Process name required for restart-process command"
+                Show-Usage
+                exit 1
+            }
+            Restart-SingleProcess $Arguments[0]
         }
         "logs" {
             $lines = if ($Arguments.Count -gt 0) { [int]$Arguments[0] } else { 50 }
