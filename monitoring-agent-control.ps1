@@ -1447,7 +1447,7 @@ function Test-Connection {
 }
 
 function Show-Usage {
-    @"
+    Write-Host @"
 Monitoring Agent Control Script $Script:AGENT_VERSION
 
 USAGE:
