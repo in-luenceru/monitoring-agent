@@ -192,23 +192,25 @@ function Unlock-Process {
 }
 
 function Wait-ProcessId {
-    param([int]$ProcessId)
+    param(
+        [int]$ProcessId,
+        [int]$TimeoutSeconds = 10
+    )
     
-    $wpCounter = 1
+    $maxIterations = $TimeoutSeconds * 10  # 100ms intervals
+    $wpCounter = 0
     
-    while ($true) {
+    while ($wpCounter -lt $maxIterations) {
         $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
         if (-not $process) {
-            return 0
-        }
-        
-        if ($wpCounter -ge $script:MAX_KILL_TRIES) {
-            return 1
+            return 0  # Process has exited
         }
         
         Start-Sleep -Milliseconds 100
         $wpCounter++
     }
+    
+    return 1  # Timeout reached, process still running
 }
 
 function Get-DaemonArgs {
@@ -269,32 +271,31 @@ function Initialize-MonitoringBypass {
     
     .DESCRIPTION
     This function sets up the bypass mechanism to handle hardcoded 
-    "wazuh" user/group references in Windows environments using DLL injection
+    "wazuh" user/group references in Windows environments using environment variables
     #>
     
     if (Test-Path $script:BYPASS_DLL) {
         Write-Log -Level "DEBUG" -Message "Windows bypass DLL available: $script:BYPASS_DLL"
         
-        # For Windows, we implement DLL injection for each process
-        # This sets up the environment for DLL injection
-        try {
-            # Load the DLL to test it
-            $dllTest = [System.Reflection.Assembly]::LoadFile($script:BYPASS_DLL)
-            if ($dllTest) {
-                Write-Log -Level "INFO" -Message "Bypass DLL loaded successfully"
-                return $true
-            }
-        }
-        catch {
-            Write-Log -Level "WARN" -Message "Failed to load bypass DLL: $($_.Exception.Message)"
-        }
-        
-        # Set environment variable to indicate bypass is available
+        # For Windows, we use environment variables to enable bypass
+        # The binaries can check for these environment variables
+        $env:WAZUH_USER_OVERRIDE = "Administrator"
+        $env:WAZUH_GROUP_OVERRIDE = "Administrators"
+        $env:MONITORING_BYPASS_ENABLED = "1"
         $env:MONITORING_BYPASS_DLL = $script:BYPASS_DLL
+        
         Write-Log -Level "INFO" -Message "Bypass mechanism initialized for Windows"
+        Write-Log -Level "DEBUG" -Message "Environment variables set:"
+        Write-Log -Level "DEBUG" -Message "  WAZUH_USER_OVERRIDE=Administrator"
+        Write-Log -Level "DEBUG" -Message "  WAZUH_GROUP_OVERRIDE=Administrators"
+        Write-Log -Level "DEBUG" -Message "  MONITORING_BYPASS_ENABLED=1"
+        
         return $true
     } else {
         Write-Log -Level "DEBUG" -Message "No bypass DLL found, using standard execution"
+        # Still set environment variables for software-based bypass
+        $env:WAZUH_USER_OVERRIDE = "Administrator"
+        $env:WAZUH_GROUP_OVERRIDE = "Administrators"
         return $false
     }
 }
@@ -302,10 +303,10 @@ function Initialize-MonitoringBypass {
 function Start-ProcessWithBypass {
     <#
     .SYNOPSIS
-    Start a process with Windows DLL injection for bypass functionality
+    Start a process with Windows bypass mechanism for user/group handling
     
     .DESCRIPTION
-    This function starts a process and injects the bypass DLL if available
+    This function starts a process with environment variables set for bypass
     #>
     param(
         [string]$FilePath,
@@ -314,43 +315,19 @@ function Start-ProcessWithBypass {
         [string]$WindowStyle = "Normal"
     )
     
-    # Check if bypass DLL is available
-    if ($IsWindows -and (Test-Path $script:BYPASS_DLL)) {
-        Write-Log -Level "DEBUG" -Message "Starting process with bypass: $FilePath"
-        
-        try {
-            # For Windows, we use a different approach with DLL injection
-            # This is a simplified version - production would use more sophisticated injection
-            
-            # First, start the process normally
-            $processParams = @{
-                FilePath = $FilePath
-                ArgumentList = $ArgumentList
-                PassThru = $PassThru
-            }
-            
-            if ($IsWindows -and $WindowStyle) {
-                $processParams.WindowStyle = $WindowStyle
-            }
-            
-            $process = Start-Process @processParams
-            
-            if ($PassThru -and $process) {
-                # For demonstration, we set an environment variable
-                # In production, you'd use DLL injection techniques here
-                [Environment]::SetEnvironmentVariable("WAZUH_BYPASS_ACTIVE", "1", [EnvironmentVariableTarget]::Process)
-                Write-Log -Level "DEBUG" -Message "Process started with bypass enabled: PID $($process.Id)"
-            }
-            
-            return $process
-        }
-        catch {
-            Write-Log -Level "ERROR" -Message "Failed to start process with bypass: $($_.Exception.Message)"
-            throw
-        }
+    # Ensure bypass environment is set
+    if (Test-Path $script:BYPASS_DLL) {
+        $env:MONITORING_BYPASS_DLL = $script:BYPASS_DLL
+        $env:MONITORING_BYPASS_ENABLED = "1"
     }
-    else {
-        # Standard process start without bypass
+    
+    # Always set user/group overrides for Windows
+    $env:WAZUH_USER_OVERRIDE = "Administrator"
+    $env:WAZUH_GROUP_OVERRIDE = "Administrators"
+    
+    Write-Log -Level "DEBUG" -Message "Starting process with bypass: $FilePath"
+    
+    try {
         $processParams = @{
             FilePath = $FilePath
             ArgumentList = $ArgumentList
@@ -361,7 +338,17 @@ function Start-ProcessWithBypass {
             $processParams.WindowStyle = $WindowStyle
         }
         
-        return Start-Process @processParams
+        $process = Start-Process @processParams
+        
+        if ($PassThru -and $process) {
+            Write-Log -Level "DEBUG" -Message "Process started successfully: PID $($process.Id)"
+        }
+        
+        return $process
+    }
+    catch {
+        Write-Log -Level "ERROR" -Message "Failed to start process: $($_.Exception.Message)"
+        throw
     }
 }
 
@@ -781,8 +768,9 @@ function Start-Agent {
                         $processInfo = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru
                     }
                     
-                    # Create PID file
-                    $pidFile = Join-Path $script:PID_DIR "$daemon-$($processInfo.Id).pid"
+                    # Create PID file using correct naming convention
+                    $pidName = Get-PidName $daemon
+                    $pidFile = Join-Path $script:PID_DIR "$pidName-$($processInfo.Id).pid"
                     $processInfo.Id | Out-File -FilePath $pidFile -Encoding ASCII
                     
                     # Wait for daemon to start properly
@@ -968,7 +956,7 @@ function Show-Logs {
     }
 }
 
-function Register-Agent {
+function Invoke-AgentEnrollment {
     param(
         [string]$ManagerInput,
         [string]$ManagerPort = "",
@@ -1243,7 +1231,7 @@ function Initialize-Setup {
     
     Write-Log "INFO" "✅ Initial setup completed successfully!"
     Write-Log "INFO" "Next steps:"
-    Write-Log "INFO" "  1. Enroll with manager: $script:SCRIPT_NAME enroll <manager_ip>"
+    Write-Log "INFO" "  1. Enroll with manager: $script:SCRIPT_NAME enroll [manager_ip]"
     Write-Log "INFO" "  2. Start the agent: $script:SCRIPT_NAME start"
     Write-Log "INFO" "  3. Check status: $script:SCRIPT_NAME status"
     
@@ -1463,11 +1451,11 @@ function Show-Usage {
 Monitoring Agent Control Script $Script:AGENT_VERSION
 
 USAGE:
-    .\$($script:SCRIPT_NAME) <command> [options]
+    .\$($script:SCRIPT_NAME) [command] [options]
 
 COMMANDS:
     setup                           Run initial setup (automatic on first start)
-    enroll <manager_ip> [port] [name]
+    enroll [manager_ip] [port] [name]
                                     Enroll agent with manager (interactive)
     start                           Start the monitoring agent
     stop                            Stop the monitoring agent
@@ -1477,8 +1465,8 @@ COMMANDS:
     health                          Run health check
     test-connection                 Test connectivity to manager
     backup                          Backup configuration
-    restore <backup_path>           Restore configuration from backup
-    configure-firewall <manager_ip> [port]
+    restore [backup_path]           Restore configuration from backup
+    configure-firewall [manager_ip] [port]
                                     Configure firewall rules
     
 OPTIONS:
@@ -1487,7 +1475,7 @@ OPTIONS:
     -VerboseLogging                 Enable debug logging
 
 QUICK START:
-    1. Enroll with manager:         .\$($script:SCRIPT_NAME) enroll <manager_ip>
+    1. Enroll with manager:         .\$($script:SCRIPT_NAME) enroll [manager_ip]
     2. Start the agent:             .\$($script:SCRIPT_NAME) start
     3. Check status:                .\$($script:SCRIPT_NAME) status
     4. Test connectivity:           .\$($script:SCRIPT_NAME) test-connection
@@ -1609,7 +1597,11 @@ function Invoke-Main {
                 Show-Usage
                 exit 1
             }
-            Register-Agent @Arguments
+            # Pass arguments properly to enrollment function
+            $managerIP = $Arguments[0]
+            $port = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+            $name = if ($Arguments.Count -gt 2) { $Arguments[2] } else { $env:COMPUTERNAME }
+            Invoke-AgentEnrollment -ManagerInput $managerIP -ManagerPort $port -AgentName $name
         }
         "health" {
             Test-Health
