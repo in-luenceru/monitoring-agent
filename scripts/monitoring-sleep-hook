@@ -1,0 +1,75 @@
+#!/bin/bash
+# Monitoring Agent Sleep/Resume Hook
+# This script handles system suspend/resume events
+# Copyright (C) 2025, Monitoring Solutions Inc.
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly AGENT_HOME="$(dirname "$SCRIPT_DIR")"
+readonly LOG_FILE="${AGENT_HOME}/logs/monitoring-agent.log"
+readonly CONTROL_SCRIPT="${AGENT_HOME}/monitoring-agent-control.sh"
+readonly RESUME_FLAG="/tmp/monitoring-agent-resume-pending"
+
+# Logging function
+log() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] [$level] [SLEEP-HOOK] $message" | tee -a "$LOG_FILE"
+}
+
+case "${1:-}" in
+    pre)
+        case "${2:-}" in
+            suspend|hibernate|hybrid-sleep|suspend-then-hibernate)
+                log "INFO" "System entering ${2} mode - preparing agent for suspension"
+                
+                # Mark that we need to check after resume
+                touch "$RESUME_FLAG"
+                
+                # Optional: Stop non-critical processes to ensure clean suspend
+                # The main agent service will handle this automatically
+                log "INFO" "Agent prepared for ${2}"
+                ;;
+        esac
+        ;;
+    post)
+        case "${2:-}" in
+            suspend|hibernate|hybrid-sleep|suspend-then-hibernate)
+                log "INFO" "System resuming from ${2} mode - checking agent health"
+                
+                # Give system time to stabilize
+                sleep 5
+                
+                # Check if we need to perform post-resume actions
+                if [[ -f "$RESUME_FLAG" ]]; then
+                    log "INFO" "Performing post-resume health check"
+                    
+                    # Check agent status
+                    if ! systemctl is-active --quiet monitoring-agent.service; then
+                        log "WARN" "Agent service not active after resume - restarting"
+                        systemctl restart monitoring-agent.service
+                    else
+                        # Service is active, but check individual processes
+                        if ! "$CONTROL_SCRIPT" health-check &>/dev/null; then
+                            log "WARN" "Agent health check failed after resume - restarting"
+                            systemctl restart monitoring-agent.service
+                        else
+                            log "INFO" "Agent health check passed after resume"
+                        fi
+                    fi
+                    
+                    # Clean up resume flag
+                    rm -f "$RESUME_FLAG"
+                else
+                    log "DEBUG" "No resume flag found - skipping post-resume checks"
+                fi
+                
+                log "INFO" "Post-resume processing completed"
+                ;;
+        esac
+        ;;
+esac
+
+exit 0
