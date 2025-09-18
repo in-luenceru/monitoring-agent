@@ -1,3 +1,5 @@
+#Requires -RunAsAdministrator
+
 # Monitoring Agent Control Script
 # Professional agent management tool for Windows systems
 # Copyright (C) 2025, Monitoring Solutions Inc.
@@ -16,68 +18,126 @@ param(
     [switch]$WindowsAgent
 )
 
-# Force Windows agent mode when -WindowsAgent switch is used OR when Windows directory structure is detected
-# This allows running Windows agent configuration on Linux PowerShell
-if ($WindowsAgent) {
-    $script:IsWindowsAgent = $true
-} else {
-    # Auto-detect Windows agent mode by checking for Windows directory and binaries
-    $windowsDir = Join-Path $PSScriptRoot "windows"
-    $windowsBinDir = Join-Path $windowsDir "bin"
-    $windowsAgentExe = Join-Path $windowsBinDir "MONITORING_AGENT.EXE"
+# Windows-first OS detection - explicit initialization
+# Note: Use custom variables for compatibility with PowerShell 5.1 and 7+
+$script:IsWindowsPlatform = $true
+$script:IsLinuxPlatform = $false
+$script:IsMacOSPlatform = $false
+$script:IsWindowsAgent = $true
+
+# Administrator check - ensure we're running with elevated privileges
+$isAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Error "This script must be run as Administrator. Please restart PowerShell as Administrator and try again."
+    exit 1
+}
+
+# Production validation checks
+function Test-ProductionRequirements {
+    $validationErrors = @()
     
-    if ((Test-Path $windowsDir) -and (Test-Path $windowsBinDir) -and (Test-Path $windowsAgentExe)) {
-        Write-Host "Auto-detected Windows agent structure, enabling Windows agent mode..." -ForegroundColor Green
-        $script:IsWindowsAgent = $true
-    } else {
-        $script:IsWindowsAgent = $IsWindows
+    # Check PowerShell version compatibility
+    $psVersion = $PSVersionTable.PSVersion
+    if ($psVersion.Major -lt 5) {
+        $validationErrors += "PowerShell 5.0 or higher is required. Current version: $($psVersion.ToString())"
     }
+    
+    # Check if we're on Windows
+    if ($PSVersionTable.Platform -and $PSVersionTable.Platform -ne "Win32NT") {
+        $validationErrors += "This script is Windows-only. Current platform: $($PSVersionTable.Platform)"
+    }
+    
+    # Validate agent home directory structure
+    $requiredDirs = @("bin", "etc", "logs", "var")
+    foreach ($dir in $requiredDirs) {
+        $dirPath = Join-Path $script:AGENT_HOME $dir
+        if (-not (Test-Path $dirPath)) {
+            $validationErrors += "Required directory missing: $dirPath"
+        }
+    }
+    
+    # Check for critical Windows features
+    try {
+        Get-Service | Out-Null
+    } catch {
+        $validationErrors += "Windows Service management not available"
+    }
+    
+    if ($validationErrors.Count -gt 0) {
+        Write-Log "ERROR" "Production validation failed:"
+        foreach ($validationError in $validationErrors) {
+            Write-Log "ERROR" "  - $validationError"
+        }
+        throw "Production requirements not met"
+    }
+    
+    Write-Log "INFO" "Production validation passed"
 }
 
 # Auto-installation and production readiness setup for Windows
 function Initialize-ProductionEnvironment {
     Write-Log "INFO" "Setting up production environment for Windows..."
     
-    # Ensure Windows service is properly installed if on Windows
-    if ($IsWindows) {
-        $serviceName = "MonitoringAgent"
-        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        
-        if (-not $service) {
-            Write-Log "INFO" "Installing Windows service for auto-startup..."
-            # Create Windows service using New-Service or sc.exe
+    # Windows service is properly installed since this is Windows-only
+    $serviceName = "MonitoringAgent"
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    
+    if (-not $service) {
+        Write-Log "INFO" "Installing Windows service for auto-startup..."
+        # Create Windows service using New-Service or sc.exe
+        try {
+            $serviceParams = @{
+                Name = $serviceName
+                BinaryPathName = "PowerShell.exe -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`" start-service"
+                DisplayName = "Monitoring Agent Service"
+                Description = "Monitoring Agent Security Platform with Fault Tolerance"
+                StartupType = "Automatic"
+            }
+            New-Service @serviceParams -ErrorAction Stop
+            Write-Log "INFO" "Windows service installed and configured for auto-startup"
+            
+            # Enable auto-recovery for the service using registry
             try {
-                $serviceParams = @{
-                    Name = $serviceName
-                    BinaryPathName = "PowerShell.exe -ExecutionPolicy Bypass -File `"$($script:SCRIPT_DIR)\monitoring-agent-control.ps1`" start-service"
-                    DisplayName = "Monitoring Agent Service"
-                    Description = "Monitoring Agent Security Platform with Fault Tolerance"
-                    StartupType = "Automatic"
-                }
-                New-Service @serviceParams -ErrorAction Stop
-                Write-Log "INFO" "Windows service installed and configured for auto-startup"
+                $servicePath = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
                 
-                # Enable auto-recovery for the service
-                & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/10000/restart/30000
+                # Set failure actions: restart after 5, 10, and 30 seconds
+                Set-ItemProperty -Path $servicePath -Name "FailureActions" -Value ([byte[]](
+                    # Reset period (24 hours = 86400 seconds)
+                    0x40, 0x51, 0x01, 0x00,
+                    # Reserved
+                    0x00, 0x00, 0x00, 0x00,
+                    # Action count (3 actions)
+                    0x03, 0x00, 0x00, 0x00,
+                    # Action 1: Restart after 5 seconds (5000 ms)
+                    0x01, 0x00, 0x00, 0x00, 0x88, 0x13, 0x00, 0x00,
+                    # Action 2: Restart after 10 seconds (10000 ms)
+                    0x01, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00,
+                    # Action 3: Restart after 30 seconds (30000 ms)
+                    0x01, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00
+                )) -Type Binary -ErrorAction SilentlyContinue
+                
                 Write-Log "INFO" "Windows service failure recovery configured"
             }
             catch {
-                Write-Log "WARN" "Failed to create Windows service: $($_.Exception.Message)"
-                # Fallback to task scheduler
-                Initialize-TaskScheduler
+                Write-Log "WARN" "Failed to configure service recovery: $($_.Exception.Message)"
             }
         }
-        else {
-            Write-Log "INFO" "Windows service already exists, ensuring proper configuration..."
-            # Update service to use start-service command
-            try {
-                $newBinaryPath = "PowerShell.exe -ExecutionPolicy Bypass -File `"$($script:SCRIPT_DIR)\monitoring-agent-control.ps1`" start-service"
-                & sc.exe config $serviceName binPath= $newBinaryPath
-                Write-Log "INFO" "Windows service updated with start-service command"
-            }
-            catch {
-                Write-Log "WARN" "Failed to update Windows service configuration: $($_.Exception.Message)"
-            }
+        catch {
+            Write-Log "WARN" "Failed to create Windows service: $($_.Exception.Message)"
+            # Fallback to task scheduler
+            Initialize-TaskScheduler
+        }
+    }
+    else {
+        Write-Log "INFO" "Windows service already exists, ensuring proper configuration..."
+        # Update service to use start-service command using PowerShell-native methods
+        try {
+            $newBinaryPath = "PowerShell.exe -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`" start-service"
+            Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName" -Name ImagePath -Value "`"$newBinaryPath`""
+            Write-Log "INFO" "Windows service updated with start-service command"
+        }
+        catch {
+            Write-Log "WARN" "Failed to update Windows service configuration: $($_.Exception.Message)"
         }
     }
     
@@ -129,7 +189,7 @@ function Initialize-TaskScheduler {
     
     try {
         $taskName = "MonitoringAgentStartup"
-        $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$($script:SCRIPT_DIR)\monitoring-agent-control.ps1`" start"
+        $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`" start"
         $trigger = New-ScheduledTaskTrigger -AtStartup
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
         $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
@@ -215,26 +275,13 @@ function Initialize-WindowsFirewall {
     }
 }
 
-# Check if running as Administrator (Cross-platform compatible)
-if ($IsWindows -and (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))) {
-    Write-Host "Monitoring Agent requires Administrator privileges. Restarting as Administrator..." -ForegroundColor Red
-    $argString = $MyInvocation.BoundParameters.Keys | ForEach-Object { "-$_ `"$($MyInvocation.BoundParameters[$_])`"" }
-    $allArgs = "$argString $($MyInvocation.UnboundArguments -join ' ')"
-    Start-Process PowerShell -Verb RunAs "-File `"$($MyInvocation.MyCommand.Path)`" $allArgs"
-    exit
-}
 
 # Auto-setup production environment on any execution (delayed to after function definitions)
 # Initialize-ProductionEnvironment
 
-# Script-level variables - Updated for Windows Monitoring agent compatibility
-if ($script:IsWindowsAgent) {
-    # Windows runs as a single agent process - simplified approach
-    $script:DAEMONS = @("monitoring-agentd")
-} else {
-    # Linux/Unix runs separate daemon processes
-    $script:DAEMONS = @("monitoring-modulesd", "monitoring-logcollector", "monitoring-syscheckd", "monitoring-agentd", "monitoring-execd")
-}
+# Script-level variables - Windows Monitoring agent configuration
+# Windows runs as a single agent process - simplified approach
+$script:DAEMONS = @("monitoring-agentd")
 $script:SDAEMONS = [array]([array]$script:DAEMONS)
 [array]::Reverse($script:SDAEMONS)
 
@@ -247,29 +294,16 @@ $script:TYPE = "agent"
 $script:SCRIPT_NAME = Split-Path -Leaf $MyInvocation.MyCommand.Path
 $script:SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Set correct agent home based on platform
-if ($script:IsWindowsAgent) {
-    $script:AGENT_HOME = Join-Path $script:SCRIPT_DIR "windows"
-    $script:BYPASS_DLL = Join-Path $script:AGENT_HOME "lib\bypass.dll"
-} else {
-    # Linux/Mac paths (fallback for PowerShell on Linux)
-    $script:AGENT_HOME = $script:SCRIPT_DIR
-    $script:BYPASS_DLL = Join-Path $script:AGENT_HOME "bypass.so"
-}
+# Set Windows agent paths
+$script:AGENT_HOME = Join-Path $script:SCRIPT_DIR "windows"
+$script:BYPASS_DLL = Join-Path $script:AGENT_HOME "lib\bypass.dll"
 
 # Use Administrator context with elevated privileges
 $script:AGENT_USER = "Administrator" 
 $script:AGENT_GROUP = "Administrators"
-$script:CONFIG_FILE = if ($script:IsWindowsAgent) {
-    Join-Path $script:AGENT_HOME "etc\OSSEC.CONF"
-} else {
-    Join-Path $script:AGENT_HOME "etc\ossec.conf"
-}
-$script:CLIENT_KEYS = if ($script:IsWindowsAgent) {
-    Join-Path $script:AGENT_HOME "etc\client.keys"
-} else {
-    Join-Path $script:AGENT_HOME "etc\client.keys"
-}
+# Windows configuration file paths
+$script:CONFIG_FILE = Join-Path $script:AGENT_HOME "etc\OSSEC.CONF"
+$script:CLIENT_KEYS = Join-Path $script:AGENT_HOME "etc\client.keys"
 $script:LOG_FILE = Join-Path $script:AGENT_HOME "logs\monitoring-agent.log"
 $script:PID_DIR = Join-Path $script:AGENT_HOME "var\run"
 
@@ -306,24 +340,18 @@ public class BypassLoader {
     }
 }
 
-# Handle TEMP directory safely - Linux/Unix compatibility
+# Handle TEMP directory for Windows
 $script:TempDir = if ($env:TEMP) { 
     $env:TEMP 
 } elseif ($env:TMP) { 
     $env:TMP 
-} elseif ($IsLinux -or $IsMacOS) {
-    "/tmp"
 } else { 
     "C:\Windows\Temp" 
 }
 $script:LOCK_FILE = Join-Path $script:TempDir "monitoring-agent-Administrator"
 
 # Process names - Using actual Windows Monitoring Agent binary names
-if ($script:IsWindowsAgent) {
-    $script:PROCESSES = @("monitoring-agentd")
-} else {
-    $script:PROCESSES = @("monitoring-modulesd", "monitoring-logcollector", "monitoring-syscheckd", "monitoring-agentd", "monitoring-execd")
-}
+$script:PROCESSES = @("monitoring-agentd")
 
 # Global variables for process management
 $script:MAX_ITERATION = 60
@@ -472,33 +500,8 @@ function Wait-ProcessId {
 function Get-DaemonArgs {
     param([string]$Daemon)
     
-    # Always run with Administrator privileges on Windows
-    if ($IsWindows) {
-        # Windows doesn't use user/group flags like Linux
-        return ""
-    } else {
-        # On Linux/Mac running via PowerShell, only use flags for supported daemons
-        switch ($Daemon) {
-            "monitoring-agentd" {
-                return "-u root -g root"
-            }
-            "monitoring-execd" {
-                return "-g root"
-            }
-            "monitoring-logcollector" {
-                return ""
-            }
-            "monitoring-modulesd" {
-                return ""
-            }
-            "monitoring-syscheckd" {
-                return ""
-            }
-            default {
-                return ""
-            }
-        }
-    }
+    # Windows doesn't use user/group flags like Linux - always run with Administrator privileges
+    return ""
 }
 
 function Get-BinaryName {
@@ -572,139 +575,6 @@ function Get-PidName {
         "wazuh-modulesd" { return "monitoring-modulesd" }
         "wazuh-syscheckd" { return "monitoring-syscheckd" }
         default { return $Daemon }
-    }
-}
-
-function Initialize-MonitoringBypass {
-    <#
-    .SYNOPSIS
-    Initialize the Monitoring Agent user/group bypass mechanism for Windows
-    
-    .DESCRIPTION
-    This function sets up the bypass mechanism to handle hardcoded 
-    "wazuh" user/group references in Windows environments using environment variables
-    #>
-    
-    if (Test-Path $script:BYPASS_DLL) {
-        Write-Log -Level "DEBUG" -Message "Windows bypass DLL available: $script:BYPASS_DLL"
-        
-        # For Windows, we use environment variables to enable bypass
-        # The binaries can check for these environment variables
-        $env:WAZUH_USER_OVERRIDE = "Administrator"
-        $env:WAZUH_GROUP_OVERRIDE = "Administrators"
-        $env:MONITORING_BYPASS_ENABLED = "1"
-        $env:MONITORING_BYPASS_DLL = $script:BYPASS_DLL
-        
-        Write-Log -Level "INFO" -Message "Bypass mechanism initialized for Windows"
-        Write-Log -Level "DEBUG" -Message "Environment variables set:"
-        Write-Log -Level "DEBUG" -Message "  WAZUH_USER_OVERRIDE=Administrator"
-        Write-Log -Level "DEBUG" -Message "  WAZUH_GROUP_OVERRIDE=Administrators"
-        Write-Log -Level "DEBUG" -Message "  MONITORING_BYPASS_ENABLED=1"
-        
-        return $true
-    } else {
-        Write-Log -Level "DEBUG" -Message "No bypass DLL found, using standard execution"
-        # Still set environment variables for software-based bypass
-        $env:WAZUH_USER_OVERRIDE = "Administrator"
-        $env:WAZUH_GROUP_OVERRIDE = "Administrators"
-        return $false
-    }
-}
-
-function Start-ProcessWithBypass {
-    <#
-    .SYNOPSIS
-    Start a process with Windows bypass mechanism for user/group handling
-    
-    .DESCRIPTION
-    This function starts a process with environment variables set for bypass
-    #>
-    param(
-        [string]$FilePath,
-        [string[]]$ArgumentList = @(),
-        [switch]$PassThru,
-        [string]$WindowStyle = "Normal"
-    )
-    
-    # Ensure bypass environment is set
-    if (Test-Path $script:BYPASS_DLL) {
-        $env:MONITORING_BYPASS_DLL = $script:BYPASS_DLL
-        $env:MONITORING_BYPASS_ENABLED = "1"
-    }
-    
-    # Always set user/group overrides for Windows
-    $env:MONITORING_USER_OVERRIDE = "Administrator"
-    $env:MONITORING_GROUP_OVERRIDE = "Administrators"
-    
-    Write-Log -Level "DEBUG" -Message "Starting process with bypass: $FilePath"
-    
-    try {
-        $processParams = @{
-            FilePath = $FilePath
-            ArgumentList = $ArgumentList
-            PassThru = $PassThru
-        }
-        
-        if ($script:IsWindowsAgent -and $WindowStyle) {
-            $processParams.WindowStyle = $WindowStyle
-        }
-        
-        $process = Start-Process @processParams
-        
-        if ($PassThru -and $process) {
-            Write-Log -Level "DEBUG" -Message "Process started successfully: PID $($process.Id)"
-        }
-        
-        return $process
-    }
-    catch {
-        Write-Log -Level "ERROR" -Message "Failed to start process: $($_.Exception.Message)"
-        throw
-    }
-}
-
-function Test-Configuration {
-    # Test configuration for all daemons
-    foreach ($daemon in $script:SDAEMONS) {
-        $daemonArgs = Get-DaemonArgs $daemon
-        $binary = Get-BinaryName $daemon
-        
-        # Handle cross-platform binary paths correctly
-        $binaryPath = if ((-not $script:IsWindowsAgent) -and ($IsLinux -or $IsMacOS)) {
-            Join-Path $script:AGENT_HOME "bin/$binary"
-        } else {
-            # Windows: binary names already include .EXE extension
-            Join-Path $script:AGENT_HOME "bin\$binary"
-        }
-        
-        $arguments = @("-t")
-        if ($daemonArgs) {
-            $arguments += $daemonArgs -split ' '
-        }
-        
-        try {
-            # Use enhanced process start with bypass support for configuration testing
-            if ($script:IsWindowsAgent) {
-                $result = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru -WindowStyle "Hidden"
-                $result | Wait-Process
-                $exitCode = $result.ExitCode
-            } else {
-                $result = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru
-                $result | Wait-Process  
-                $exitCode = $result.ExitCode
-            }
-            
-            if ($exitCode -ne 0) {
-                Write-Log "ERROR" "$daemon`: Configuration error. Exiting"
-                Unlock-Process
-                exit 1
-            }
-        }
-        catch {
-            Write-Log "ERROR" "$daemon`: Failed to test configuration - $($_.Exception.Message)"
-            Unlock-Process
-            exit 1
-        }
     }
 }
 
@@ -791,12 +661,8 @@ function Initialize-Environment {
         (Join-Path $script:AGENT_HOME "backup")
     )
     
-    # Add Windows-specific or cross-platform directories
-    if ($IsWindows) {
-        $directories += "C:\ProgramData\monitoring-agent\logs"
-    } else {
-        $directories += "/var/monitoring-agent/logs"
-    }
+    # Add Windows-specific directories
+    $directories += "C:\ProgramData\monitoring-agent\logs"
     
     # Create directories with proper permissions
     foreach ($dir in $directories) {
@@ -822,12 +688,8 @@ function Initialize-Environment {
         }
     }
     
-    # Create required log files
-    $activeResponsesLog = if ($IsWindows) {
-        "C:\ProgramData\monitoring-agent\logs\active-responses.log"
-    } else {
-        "/var/monitoring-agent/logs/active-responses.log"
-    }
+    # Create required log files for Windows
+    $activeResponsesLog = "C:\ProgramData\monitoring-agent\logs\active-responses.log"
     
     if (-not (Test-Path $activeResponsesLog)) {
         try {
@@ -1470,13 +1332,8 @@ function Start-Agent {
             
             Write-Log "INFO" "Starting $daemon..."
             
-            # Handle cross-platform binary paths correctly
-            $binaryPath = if ($IsLinux -or $IsMacOS) {
-                Join-Path $script:AGENT_HOME "bin/$binary"
-            } else {
-                # Windows: binary names already include .EXE extension
-                Join-Path $script:AGENT_HOME "bin\$binary"
-            }
+            # Windows binary path - binary names already include .EXE extension
+            $binaryPath = Join-Path $script:AGENT_HOME "bin\$binary"
             
             if (-not (Test-Path $binaryPath)) {
                 Write-Log "ERROR" "Binary not found: $binaryPath"
@@ -1489,12 +1346,8 @@ function Start-Agent {
                         $arguments += $daemonArgs -split ' '
                     }
                     
-                    # Use enhanced process start with bypass support
-                    if ($IsWindows) {
-                        $processInfo = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru -WindowStyle "Hidden"
-                    } else {
-                        $processInfo = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru
-                    }
+                    # Use enhanced process start with bypass support (Windows-only)
+                    $processInfo = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru -WindowStyle "Hidden"
                     
                     # Create PID file using correct naming convention
                     $pidName = Get-PidName $daemon
@@ -1569,16 +1422,16 @@ function Stop-Agent {
     
     # FIRST: Stop Windows services if they exist (only on actual Windows)
     $servicesFound = $false
-    if ($IsWindows) {
-        $services = @("MonitoringAgent", "MonitoringAgentWatchdog")
-        foreach ($serviceName in $services) {
-            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-            if ($service -and $service.Status -eq 'Running') {
-                try {
-                    Stop-Service -Name $serviceName -Force -ErrorAction Stop
-                    Write-Log "INFO" "Stopped Windows service: $serviceName"
-                    $servicesFound = $true
-                }
+    # Windows service management
+    $services = @("MonitoringAgent", "MonitoringAgentWatchdog")
+    foreach ($serviceName in $services) {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq 'Running') {
+            try {
+                Stop-Service -Name $serviceName -Force -ErrorAction Stop
+                Write-Log "INFO" "Stopped Windows service: $serviceName"
+                $servicesFound = $true
+            }
             catch {
                 Write-Log "WARN" "Failed to stop service $serviceName`: $($_.Exception.Message)"
             }
@@ -1599,7 +1452,7 @@ function Stop-Agent {
             }
         }
     }
-    } else {
+    else {
         Write-Log "INFO" "Windows services not available on this platform"
     }
     
@@ -1846,7 +1699,7 @@ function Invoke-AgentEnrollment {
         Write-Host "====================================================" -ForegroundColor Yellow
         Write-Host "Please provide the client key obtained from the manager."
         Write-Host "You can get this key by running on the manager:"
-        Write-Host "  sudo /var/ossec/bin/manage_agents -l"
+        Write-Host "  # Use the Windows agent management tools instead"
         Write-Host ""
         Write-Host "The key should be in format:"
         Write-Host "  001 agent-name 192.168.1.100 abc123...def456"
@@ -1941,7 +1794,7 @@ function Invoke-AgentEnrollment {
     
     # Create/update client.keys file with proper format
     Write-Log "INFO" "Setting up client authentication..."
-    "$AgentId $AgentName $AgentIP $AgentKey" | Set-Content $script:CLIENT_KEYS -Encoding ASCII
+    "$AgentId $AgentName $AgentIP $AgentKey" | Set-Content $script:CLIENT_KEYS -Encoding utf8
     
     Write-Log "INFO" "✅ Agent enrollment completed successfully!"
     Write-Log "INFO" "   Agent ID: $AgentId"
@@ -2026,11 +1879,11 @@ function Initialize-StateTracking {
     }
     
     # Record startup time
-    [int][double]::Parse((Get-Date -UFormat %s)) | Set-Content -Path (Join-Path $stateDir "startup_time") -Encoding ASCII
+    [int][double]::Parse((Get-Date -UFormat %s)) | Set-Content -Path (Join-Path $stateDir "startup_time") -Encoding utf8
     
     # Initialize process restart counters
     foreach ($daemon in $script:DAEMONS) {
-        "0" | Set-Content -Path (Join-Path $stateDir "restart_count_$daemon") -Encoding ASCII
+        "0" | Set-Content -Path (Join-Path $stateDir "restart_count_$daemon") -Encoding utf8
     }
     
     Write-Log "DEBUG" "State tracking initialized"
@@ -2057,7 +1910,7 @@ function Start-ProcessMonitoring {
         try {
             $process = Start-Process -FilePath "PowerShell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$recoveryScript`"" -WindowStyle Hidden -PassThru
             $pidFile = Join-Path $script:PID_DIR "monitoring-recovery.pid"
-            $process.Id | Set-Content -Path $pidFile -Encoding ASCII
+            $process.Id | Set-Content -Path $pidFile -Encoding utf8
             Write-Log "DEBUG" "Recovery monitoring started with PID: $($process.Id)"
         }
         catch {
@@ -2084,24 +1937,6 @@ function Stop-ProcessMonitoring {
             Write-Log "WARN" "Failed to stop recovery monitoring: $($_.Exception.Message)"
         }
     }
-}
-
-function Initialize-RecoverySystem {
-    # Create state tracking directory
-    $stateDir = Join-Path $script:AGENT_HOME "var\state"
-    if (-not (Test-Path $stateDir)) {
-        New-Item -Path $stateDir -ItemType Directory -Force | Out-Null
-    }
-    
-    # Record startup time
-    [int][double]::Parse((Get-Date -UFormat %s)) | Set-Content -Path (Join-Path $stateDir "startup_time") -Encoding ASCII
-    
-    # Initialize process restart counters
-    foreach ($daemon in $script:DAEMONS) {
-        "0" | Set-Content -Path (Join-Path $stateDir "restart_count_$daemon") -Encoding ASCII
-    }
-    
-    Write-Log "DEBUG" "Recovery system initialized"
 }
 
 function Initialize-SignalHandlers {
@@ -2194,7 +2029,7 @@ function Restart-SingleProcess {
             $counterFile = Join-Path $stateDir "restart_count_$ProcessName"
             if (Test-Path $counterFile) {
                 $count = [int](Get-Content $counterFile) + 1
-                $count | Set-Content $counterFile -Encoding ASCII
+                $count | Set-Content $counterFile -Encoding utf8
             }
             
             Write-Log "INFO" "✓ Successfully restarted $ProcessName"
@@ -2598,12 +2433,8 @@ function Initialize-Setup {
     Write-Log "DEBUG" "Verifying agent binaries..."
     $missingBinaries = @()
     foreach ($process in $script:PROCESSES) {
-        # Handle cross-platform binary extensions and paths
-        $binary = if ($IsLinux -or $IsMacOS) {
-            Join-Path $script:AGENT_HOME "bin/$process"
-        } else {
-            Join-Path $script:AGENT_HOME "bin/$process.exe"
-        }
+        # Windows binary paths with .exe extension
+        $binary = Join-Path $script:AGENT_HOME "bin/$process.exe"
         if (-not (Test-Path $binary)) {
             $missingBinaries += $binary
         }
@@ -2620,7 +2451,7 @@ function Initialize-Setup {
     New-WindowsService
     
     # 7. Mark setup as complete
-    "Setup completed on: $(Get-Date)" | Set-Content $setupMarker
+    "Setup completed on: $(Get-Date)" | Set-Content $setupMarker -Encoding utf8
     
     Write-Log "INFO" "✅ Initial setup completed successfully!"
     Write-Log "INFO" "Next steps:"
@@ -2661,51 +2492,82 @@ function New-WindowsService {
                 Start-Sleep -Seconds 5
             }
             
-            # Delete existing service
-            & sc.exe delete $serviceName | Out-Null
+            # Delete existing service with PowerShell 5.1 compatibility
+            if (Get-Command "Remove-Service" -ErrorAction SilentlyContinue) {
+                Remove-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+            } else {
+                # Fallback for PowerShell 5.1
+                & sc.exe delete $serviceName | Out-Null
+            }
             Start-Sleep -Seconds 2
         }
         
-        # Create the service with comprehensive configuration
+        # Create the service with comprehensive configuration using PowerShell-native methods
         Write-Log "DEBUG" "Creating service with binary path: $binaryPath"
         
-        $createResult = & sc.exe create $serviceName `
-            binPath= $binaryPath `
-            DisplayName= $serviceDisplayName `
-            start= auto `
-            type= own `
-            depend= "Tcpip/Afd" `
-            obj= "LocalSystem"
-            
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to create service. Exit code: $LASTEXITCODE. Output: $createResult"
+        # Use New-Service with PowerShell 5.1 compatible parameters
+        $serviceParams = @{
+            Name = $serviceName
+            BinaryPathName = $binaryPath
+            DisplayName = $serviceDisplayName
+            StartupType = "Automatic"
         }
         
-        # Set service description
-        & sc.exe description $serviceName $serviceDescription | Out-Null
+        # Add DependsOn only if supported (may not work in all PowerShell versions)
+        try {
+            $serviceParams.DependsOn = @("Tcpip", "Afd")
+        } catch {
+            Write-Log "DEBUG" "Service dependencies not supported in this PowerShell version"
+        }
         
-        # Configure failure recovery options
+        $newService = New-Service @serviceParams -ErrorAction Stop
+        
+        if (-not $newService) {
+            throw "Failed to create service using New-Service"
+        }
+        
+        # Set description separately for PowerShell 5.1 compatibility
+        try {
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName" -Name Description -Value $serviceDescription -ErrorAction SilentlyContinue
+        } catch {
+            Write-Log "DEBUG" "Could not set service description via registry"
+        }
+        
+        # Configure failure recovery options using registry since PowerShell doesn't have native cmdlets for this
         Write-Log "DEBUG" "Configuring service recovery options"
         
-        # Set failure actions: restart after 1 minute, restart after 5 minutes, restart after 10 minutes
-        $failureActions = @(
-            "reset= 3600",  # Reset failure count after 1 hour
-            "actions= restart/60000/restart/300000/restart/600000"
-        )
-        
-        & sc.exe failure $serviceName @failureActions | Out-Null
-        
-        # Configure additional service parameters
-        $configParams = @{
-            "DelayedAutostart" = "1"  # Delayed automatic start
+        try {
+            # Set failure actions using registry
+            $servicePath = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
+            
+            # Configure automatic restart on failure
+            # These registry values configure the service to restart after failures
+            Set-ItemProperty -Path $servicePath -Name "FailureActions" -Value ([byte[]](
+                # Reset period (1 hour = 3600 seconds)
+                0x10, 0x0E, 0x00, 0x00,
+                # Reserved
+                0x00, 0x00, 0x00, 0x00,
+                # Action count (3 actions)
+                0x03, 0x00, 0x00, 0x00,
+                # Action 1: Restart after 1 minute (60000 ms)
+                0x01, 0x00, 0x00, 0x00, 0x60, 0xEA, 0x00, 0x00,
+                # Action 2: Restart after 5 minutes (300000 ms)
+                0x01, 0x00, 0x00, 0x00, 0x20, 0x93, 0x04, 0x00,
+                # Action 3: Restart after 10 minutes (600000 ms)
+                0x01, 0x00, 0x00, 0x00, 0x40, 0x26, 0x09, 0x00
+            )) -Type Binary -ErrorAction SilentlyContinue
+            
+            # Enable failure flag
+            Set-ItemProperty -Path $servicePath -Name "FailureActionsOnNonCrashFailures" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            
+            # Configure delayed auto-start for system stability
+            Set-ItemProperty -Path $servicePath -Name "DelayedAutostart" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            
+            Write-Log "INFO" "Service failure recovery and delayed start configured via registry"
         }
-        
-        foreach ($param in $configParams.GetEnumerator()) {
-            & sc.exe config $serviceName $param.Key= $param.Value | Out-Null
+        catch {
+            Write-Log "WARN" "Could not configure service failure recovery: $($_.Exception.Message)"
         }
-        
-        # Set service to restart on failure immediately
-        & sc.exe failureflag $serviceName "1" | Out-Null
         
         # Configure service privileges and security
         Write-Log "DEBUG" "Configuring service security"
@@ -2875,14 +2737,22 @@ function Remove-WindowsService {
             Write-Log "DEBUG" "Removed scheduled task: $taskName"
         }
         
-        # Delete the service
-        $result = & sc.exe delete $serviceName
-        if ($LASTEXITCODE -eq 0) {
+        # Delete the service with PowerShell 5.1 compatibility
+        try {
+            if (Get-Command "Remove-Service" -ErrorAction SilentlyContinue) {
+                Remove-Service -Name $serviceName -Force -ErrorAction Stop
+            } else {
+                # Fallback for PowerShell 5.1
+                $result = & sc.exe delete $serviceName
+                if ($LASTEXITCODE -ne 0) {
+                    throw "sc.exe delete failed: $result"
+                }
+            }
             Write-Log "INFO" "✓ Windows service removed successfully: $serviceName"
             return $true
         }
-        else {
-            Write-Log "ERROR" "Failed to remove service: $result"
+        catch {
+            Write-Log "ERROR" "Failed to remove service: $($_.Exception.Message)"
             return $false
         }
     }
@@ -3354,7 +3224,7 @@ ENROLLMENT PROCESS:
     - Offer to start the agent immediately
     
     To get the client key, run on your manager:
-    sudo /var/ossec/bin/manage_agents -l
+    # Windows agent management - use Windows tools instead of Linux commands
 
 EXAMPLES:
     .\$($script:SCRIPT_NAME) enroll 192.168.1.100
@@ -3400,6 +3270,15 @@ function Invoke-Main {
         return
     }
     
+    # Run production validation before any operations
+    try {
+        Test-ProductionRequirements
+    }
+    catch {
+        Write-Error "Production validation failed: $($_.Exception.Message)"
+        exit 1
+    }
+    
     # Set global debug flag
     if ($VerboseLogging) {
         $script:VERBOSE = $true
@@ -3414,19 +3293,9 @@ function Invoke-Main {
     switch ($Command.ToLower()) {
         "start" {
             # Run as current user - no special privileges required
-            Write-Log "INFO" "Starting agent as current user: $(whoami)"
-            if ($script:IsWindowsAgent -and (-not $IsWindows)) {
-                # When testing Windows agent configuration on Linux, use internal validation
-                Write-Log "INFO" "Running configuration validation (Windows agent on Linux)..."
-                $valid = Test-ConfigurationInternal
-                if (-not $valid) {
-                    Write-Log "ERROR" "Configuration validation failed"
-                    exit 1
-                }
-            } else {
-                # Use full binary test on actual Windows or Linux agents
-                Test-Configuration
-            }
+            Write-Log "INFO" "Starting agent as current user: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+            # Run configuration validation for Windows
+            Test-Configuration
             Lock-Process
             try {
                 Start-Agent
@@ -3469,18 +3338,8 @@ function Invoke-Main {
             }
         }
         "restart" {
-            if ($script:IsWindowsAgent -and (-not $IsWindows)) {
-                # When testing Windows agent configuration on Linux, use internal validation
-                Write-Log "INFO" "Running configuration validation (Windows agent on Linux)..."
-                $valid = Test-ConfigurationInternal
-                if (-not $valid) {
-                    Write-Log "ERROR" "Configuration validation failed"
-                    exit 1
-                }
-            } else {
-                # Use full binary test on actual Windows or Linux agents
-                Test-Configuration
-            }
+            # Run configuration validation for Windows
+            Test-Configuration
             Lock-Process
             try {
                 Stop-Agent
@@ -3570,20 +3429,8 @@ function Invoke-Main {
         }
         "test" {
             Write-Log "INFO" "Testing Windows agent configuration..."
-            if ($script:IsWindowsAgent -and (-not $IsWindows)) {
-                # When testing Windows agent configuration on Linux, use internal validation
-                Write-Log "INFO" "Running configuration validation (Windows agent on Linux)..."
-                $valid = Test-ConfigurationInternal
-                if ($valid) {
-                    Write-Log "INFO" "Configuration validation passed"
-                } else {
-                    Write-Log "ERROR" "Configuration validation failed"
-                    exit 1
-                }
-            } else {
-                # Use full binary test on actual Windows or Linux agents
-                Test-Configuration
-            }
+            # Run configuration validation for Windows
+            Test-Configuration
             Write-Log "INFO" "Configuration test completed successfully"
         }
         "logs" {
