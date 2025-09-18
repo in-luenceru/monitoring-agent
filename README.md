@@ -6,9 +6,13 @@
 - [Quick Start](#quick-start)
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
+- [Platform-Specific Features](#platform-specific-features)
+  - [Linux/Unix Features](#linux-unix-features)
+  - [Windows Features](#windows-features)
 - [Monitoring Manager Setup with Docker](#monitoring-manager-setup-with-docker)
 - [Agent Enrollment](#agent-enrollment)
 - [Agent Management](#agent-management)
+- [Fault Tolerance & Recovery](#fault-tolerance--recovery)
 - [Troubleshooting](#troubleshooting)
 - [Advanced Configuration](#advanced-configuration)
 
@@ -23,31 +27,43 @@ The **Monitoring Agent** is a professional security monitoring solution that pro
 - 🔐 **Interactive Enrollment**: Guided enrollment with validation
 - 📝 **Auto-Configuration**: Configuration files updated automatically
 - 🐳 **Docker Ready**: Works seamlessly with containerized Monitoring managers
+- 🔄 **Cross-Platform**: Full support for Linux/Unix and Windows
+- 🛡️ **Fault Tolerant**: Advanced monitoring, watchdog, and auto-recovery
+- 🔧 **Permission Bypass**: Built-in bypass mechanisms for restricted environments
 
 ---
 
 ## Quick Start
 
-### 1. Extract and Setup
+### Linux/Unix
 ```bash
-# Extract the monitoring agent
+# Extract and setup
 tar -xzf monitoring-agent.tar.gz
 cd monitoring-agent
 
 # Make script executable
 chmod +x monitoring-agent-control.sh
-```
 
-### 2. Enroll with Manager
-```bash
-# Interactive enrollment (will prompt for client key)
+# Interactive enrollment
 ./monitoring-agent-control.sh enroll <MANAGER_IP>
+
+# Start agent
+./monitoring-agent-control.sh start
 ```
 
-### 3. Start Agent
-```bash
-# Start with auto-setup
-./monitoring-agent-control.sh start
+### Windows
+```powershell
+# Extract monitoring agent files
+cd monitoring-agent
+
+# Interactive enrollment (run as Administrator)
+.\monitoring-agent-control.ps1 enroll <MANAGER_IP>
+
+# Start agent with fault tolerance
+.\monitoring-agent-control.ps1 start
+
+# Install as Windows service (optional)
+.\monitoring-agent-control.ps1 install-service
 ```
 
 ### 4. Verify Connection
@@ -103,6 +119,78 @@ cd monitoring-agent
 
 # Ready to use
 .\monitoring-agent-control.ps1 -Help
+```
+
+---
+
+## Platform-Specific Features
+
+### Linux/Unix Features
+
+#### Fault Tolerance System
+- **Process Watchdog**: Monitors and restarts failed processes automatically
+- **Boot Recovery**: Automatically restarts agent after system reboot
+- **Health Monitoring**: Continuous health checks with alerting
+- **Signal Handling**: Graceful shutdown on system signals
+
+#### Permission Bypass
+- **LD_PRELOAD Bypass**: Automatic bypass for restricted environments
+- **Auto-Detection**: Automatically loads bypass library if available
+- **User/Group Emulation**: Works with any user/group configuration
+
+#### Service Integration
+- **Systemd Service**: Automatic installation of systemd service
+- **Auto-startup**: Configured for automatic startup on boot
+- **Service Recovery**: Automatic restart on service failure
+
+#### Enhanced Logging
+- **Structured Logging**: Comprehensive logging with levels
+- **Log Rotation**: Automatic log rotation to prevent disk space issues
+- **Health Reports**: Regular health status reports
+
+### Windows Features
+
+#### Fault Tolerance System
+- **Process Watchdog**: PowerShell-based process monitoring and restart
+- **Boot Recovery**: Windows Task Scheduler-based boot recovery
+- **Health Monitoring**: Continuous health checks with Windows Event Log integration
+- **Service Recovery**: Advanced Windows service recovery configuration
+
+#### Permission Bypass
+- **DLL Injection**: Windows DLL-based permission bypass
+- **API Hooking**: Hooks Windows API calls for enhanced access
+- **Process Privilege**: Automatic privilege escalation for monitoring processes
+- **File System Bypass**: Bypasses file system restrictions
+
+#### Windows Service Integration
+- **Windows Service**: Full Windows service with recovery options
+- **Service Control Manager**: Integration with Windows SCM
+- **Auto-startup**: Delayed startup for system stability
+- **Power Management**: Handles system suspend/resume events
+- **Task Scheduler**: Backup scheduling for critical functions
+
+#### Enhanced Features
+- **Event Log Integration**: Writes to Windows Event Log
+- **Power Event Handling**: Responds to system power events
+- **Registry Integration**: Stores configuration in Windows Registry
+- **WMI Integration**: Uses WMI for system information
+
+#### Windows-Specific Commands
+```powershell
+# Install as Windows service
+.\monitoring-agent-control.ps1 install-service
+
+# Remove Windows service
+.\monitoring-agent-control.ps1 uninstall-service
+
+# Run in service mode
+.\monitoring-agent-control.ps1 service-mode
+
+# Comprehensive health check
+.\monitoring-agent-control.ps1 health-check-full
+
+# Test fault tolerance
+.\monitoring-agent-control.ps1 health-check-full
 ```
 
 ---
@@ -358,6 +446,130 @@ cat etc/ossec.conf | grep -A3 server
 # Configure firewall
 ./monitoring-agent-control.sh configure-firewall <manager_ip>
 ```
+
+---
+
+## Fault Tolerance & Recovery
+
+### Overview
+The monitoring agent includes comprehensive fault tolerance and recovery mechanisms to ensure maximum uptime and reliability.
+
+### Fault Tolerance Features
+
+#### Process Monitoring
+- **Automatic Process Restart**: Failed processes are automatically restarted
+- **Restart Limits**: Configurable restart attempts to prevent infinite loops
+- **Cooldown Periods**: Intelligent delays between restart attempts
+- **Health Monitoring**: Continuous monitoring of process health
+
+#### Boot Recovery
+- **State Persistence**: Remembers running state across reboots
+- **Automatic Startup**: Restarts agent automatically after system reboot
+- **Configuration Validation**: Verifies configuration before starting
+- **Dependency Checks**: Ensures all requirements are met before startup
+
+#### Watchdog System
+- **Multi-Level Monitoring**: Monitors both individual processes and overall health
+- **Background Operation**: Runs independently from main agent processes
+- **Self-Healing**: Can recover from its own failures
+- **Escalation Paths**: Multiple recovery strategies based on failure type
+
+### Fault Tolerance Commands
+
+#### Linux/Unix
+```bash
+# Check comprehensive health (including fault tolerance)
+./monitoring-agent-control.sh health-check-full
+
+# Manually restart a specific process
+./monitoring-agent-control.sh restart-process <process_name>
+
+# Check boot recovery status
+./scripts/monitoring-boot-recovery.sh status
+
+# Test watchdog functionality
+./scripts/monitoring-watchdog.sh health
+
+# View fault tolerance logs
+tail -f logs/monitoring-watchdog.log
+tail -f logs/boot-recovery.log
+```
+
+#### Windows
+```powershell
+# Check comprehensive health (including fault tolerance)
+.\monitoring-agent-control.ps1 health-check-full
+
+# Manually restart a specific process
+.\monitoring-agent-control.ps1 restart-process <process_name>
+
+# Check boot recovery status
+.\scripts\windows\monitoring-boot-recovery.ps1 status
+
+# Test watchdog functionality
+.\scripts\windows\monitoring-watchdog.ps1 health
+
+# View fault tolerance logs
+Get-Content logs\monitoring-watchdog.log -Tail 50 -Wait
+Get-Content logs\boot-recovery.log -Tail 50 -Wait
+```
+
+### Monitoring Fault Tolerance Health
+
+#### Health Check Reports
+```bash
+# Basic health check
+./monitoring-agent-control.sh health
+# ✓ All agent processes running
+# ✓ Configuration valid
+# ✓ Manager connectivity OK
+
+# Comprehensive health check with fault tolerance
+./monitoring-agent-control.sh health-check-full
+# ✓ All agent processes running
+# ✓ Configuration valid
+# ✓ Manager connectivity OK
+# ✓ Watchdog process active
+# ✓ Boot recovery configured
+# ✓ Recovery monitoring active
+# ✓ Restart counters: 0 total restarts
+```
+
+#### Log Analysis
+```bash
+# View health reports
+grep "Health report" logs/monitoring-watchdog.log
+grep "Recovery Status" logs/boot-recovery.log
+
+# Check restart counts
+find var/state -name "restart_count_*" -exec cat {} \;
+
+# View recent recovery actions
+grep "restart\|recovery" logs/monitoring-*.log | tail -20
+```
+
+### Fault Tolerance Configuration
+
+#### Restart Limits
+```bash
+# Default settings (configurable in scripts)
+MAX_RESTART_ATTEMPTS=5     # per process per hour
+RESTART_WINDOW=3600        # 1 hour in seconds
+CHECK_INTERVAL=30          # health check interval in seconds
+```
+
+#### Boot Recovery Settings
+```bash
+# Configuration files
+var/state/was_running      # Agent running state
+var/state/startup_time     # Last startup timestamp
+var/state/restart_count_*  # Per-process restart counters
+```
+
+#### Bypass Integration
+- **Automatic Loading**: Bypass libraries loaded automatically during recovery
+- **State Preservation**: Bypass state maintained across restarts
+- **Recovery Integration**: Bypass status included in health checks
 
 ---
 

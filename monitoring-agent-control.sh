@@ -517,6 +517,9 @@ start_agent() {
     # Ensure proper environment before starting
     ensure_environment
     
+    # Restore agent connection if it was disabled during stop
+    restore_agent_connection
+    
     # Clean PID files and check processes
     checkpid;
 
@@ -630,14 +633,46 @@ stop_agent()
 {
     echo "Stopping Monitoring Agent $VERSION and Fault Tolerance..."
     
-    # Mark agent as stopped for boot recovery
+    # FIRST: Stop systemd services if they exist
+    local services_found=false
+    for service in "monitoring-agent.service" "monitoring-agent-watchdog.service"; do
+        if systemctl is-active "$service" >/dev/null 2>&1; then
+            echo "Stopping systemd service: $service"
+            systemctl stop "$service" 2>/dev/null || true
+            services_found=true
+        fi
+    done
+    
+    if [[ "$services_found" = true ]]; then
+        echo "Waiting for systemd services to stop..."
+        sleep 5
+        
+        # Verify systemd services are stopped
+        for service in "monitoring-agent.service" "monitoring-agent-watchdog.service"; do
+            if systemctl is-active "$service" >/dev/null 2>&1; then
+                echo "Warning: $service is still active"
+            fi
+        done
+    fi
+    
+    # SECOND: Mark agent as stopped for boot recovery to prevent restarts
     local boot_recovery_script="${SCRIPT_DIR}/scripts/monitoring-boot-recovery.sh"
     if [[ -f "$boot_recovery_script" ]]; then
         "$boot_recovery_script" mark-stopped 2>/dev/null || true
+        log "INFO" "Marked agent as stopped"
     fi
     
-    # Stop fault tolerance components first
+    # THIRD: Force agent disconnection from Wazuh manager
+    force_agent_disconnect
+    
+    # Give a moment for state change to take effect
+    sleep 2
+    
+    # FOURTH: Stop fault tolerance components (including watchdog)
     stop_fault_tolerance_components
+    
+    # Give more time for watchdog to detect state change and exit
+    sleep 3
     
     checkpid;
     for i in ${DAEMONS}; do
@@ -670,9 +705,104 @@ stop_agent()
         rm -f ${DIR}/var/run/${pid_name}-*.pid 2>/dev/null || sudo rm -f ${DIR}/var/run/${pid_name}-*.pid 2>/dev/null
      done
 
+    # Final verification and cleanup
+    log "INFO" "Performing final verification..."
+    
+    # Kill any remaining monitoring processes by name
+    local killed_count=0
+    for process_name in ${DAEMONS}; do
+        local pids=$(pgrep -f "bin/${process_name}" 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            echo "Force killing remaining $process_name processes: $pids"
+            for pid in $pids; do
+                kill -9 "$pid" 2>/dev/null || true
+                killed_count=$((killed_count + 1))
+            done
+        fi
+    done
+    
+    # Wait a moment and verify again
+    if [[ $killed_count -gt 0 ]]; then
+        sleep 2
+        echo "Killed $killed_count remaining processes"
+    fi
+    
+    # Final verification
+    local still_running=0
+    for process_name in ${DAEMONS}; do
+        if pgrep -f "bin/${process_name}" >/dev/null 2>&1; then
+            echo "Warning: $process_name may still be running"
+            still_running=1
+        fi
+    done
+    
+    # Clean up any remaining state files
+    rm -f "${AGENT_HOME}/var/state/was_running" 2>/dev/null || true
+    
+    # Remove any stale PID files
+    rm -f "${AGENT_HOME}/var/run/"*.pid 2>/dev/null || true
+    
+    if [[ $still_running -eq 0 ]]; then
+        echo "✓ All processes confirmed stopped"
+    else
+        echo "⚠ Some processes may still be running - please check manually"
+    fi
+
     echo "Monitoring Agent $VERSION Stopped"
 }
 
+# Force agent disconnection from Wazuh manager
+force_agent_disconnect() {
+    log "INFO" "Forcing agent disconnection from Wazuh manager..."
+    
+    # Check if client.keys file exists
+    if [[ ! -f "$CLIENT_KEYS" ]]; then
+        log "DEBUG" "No client keys found, agent not enrolled"
+        return 0
+    fi
+    
+    # Get agent ID from client.keys
+    local agent_id=$(head -1 "$CLIENT_KEYS" 2>/dev/null | cut -d' ' -f1)
+    if [[ -z "$agent_id" ]]; then
+        log "WARN" "Could not determine agent ID"
+        return 1
+    fi
+    
+    log "INFO" "Agent ID: $agent_id - temporarily disabling connection"
+    
+    # Backup the client.keys file
+    cp "$CLIENT_KEYS" "${CLIENT_KEYS}.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
+    
+    # Temporarily rename client.keys to force disconnection
+    mv "$CLIENT_KEYS" "${CLIENT_KEYS}.stopped" 2>/dev/null || true
+    
+    log "INFO" "Agent authentication disabled - will appear as disconnected"
+    
+    # Alternative: Send explicit disconnect via agent_control if available
+    # This requires knowing the manager IP and having agent_control access
+    local server_ip=$(grep -A 10 "<client>" "$CONFIG_FILE" | grep "<address>" | sed 's/.*<address>\(.*\)<\/address>.*/\1/' | head -1 2>/dev/null)
+    if [[ -n "$server_ip" ]]; then
+        log "DEBUG" "Manager IP: $server_ip"
+        # We could try to send a disconnect message here if we had the protocol details
+    fi
+}
+
+# Restore agent connection (used when starting after stop)
+restore_agent_connection() {
+    log "DEBUG" "Checking for disabled agent connection..."
+    
+    # Check if client.keys was disabled during stop
+    if [[ -f "${CLIENT_KEYS}.stopped" ]] && [[ ! -f "$CLIENT_KEYS" ]]; then
+        log "INFO" "Restoring agent connection capabilities..."
+        mv "${CLIENT_KEYS}.stopped" "$CLIENT_KEYS" 2>/dev/null || true
+        
+        # Set proper permissions
+        chmod 644 "$CLIENT_KEYS" 2>/dev/null || true
+        chown root:root "$CLIENT_KEYS" 2>/dev/null || true
+        
+        log "INFO" "Agent authentication restored"
+    fi
+}
 
 stop_process() {
     local process_name="$1"
@@ -901,11 +1031,15 @@ stop_watchdog_process() {
         local watchdog_pid=$(cat "$watchdog_pid_file" 2>/dev/null)
         if [[ -n "$watchdog_pid" ]] && kill -0 "$watchdog_pid" 2>/dev/null; then
             log "DEBUG" "Stopping process watchdog (PID: $watchdog_pid)..."
-            kill "$watchdog_pid" 2>/dev/null || true
             
-            # Wait for graceful shutdown
-            for i in {1..10}; do
+            # Send TERM signal first to allow graceful shutdown
+            kill -TERM "$watchdog_pid" 2>/dev/null || true
+            
+            # Wait longer for graceful shutdown (watchdog checks state every 30s)
+            log "DEBUG" "Waiting for watchdog to detect state change..."
+            for i in {1..45}; do  # Wait up to 45 seconds
                 if ! kill -0 "$watchdog_pid" 2>/dev/null; then
+                    log "DEBUG" "Watchdog exited gracefully"
                     break
                 fi
                 sleep 1
@@ -913,11 +1047,15 @@ stop_watchdog_process() {
             
             # Force kill if still running
             if kill -0 "$watchdog_pid" 2>/dev/null; then
+                log "DEBUG" "Force killing stubborn watchdog process"
                 kill -9 "$watchdog_pid" 2>/dev/null || true
+                sleep 2
             fi
         fi
         rm -f "$watchdog_pid_file"
         log "DEBUG" "Process watchdog stopped"
+    else
+        log "DEBUG" "No watchdog PID file found"
     fi
 }
 
