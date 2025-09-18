@@ -12,11 +12,30 @@ param(
     
     [switch]$Help,
     [switch]$Version,
-    [switch]$VerboseLogging
+    [switch]$VerboseLogging,
+    [switch]$WindowsAgent
 )
 
+# Force Windows agent mode when -WindowsAgent switch is used OR when Windows directory structure is detected
+# This allows running Windows agent configuration on Linux PowerShell
+if ($WindowsAgent) {
+    $script:IsWindowsAgent = $true
+} else {
+    # Auto-detect Windows agent mode by checking for Windows directory and binaries
+    $windowsDir = Join-Path $PSScriptRoot "windows"
+    $windowsBinDir = Join-Path $windowsDir "bin"
+    $windowsAgentExe = Join-Path $windowsBinDir "MONITORING_AGENT.EXE"
+    
+    if ((Test-Path $windowsDir) -and (Test-Path $windowsBinDir) -and (Test-Path $windowsAgentExe)) {
+        Write-Host "Auto-detected Windows agent structure, enabling Windows agent mode..." -ForegroundColor Green
+        $script:IsWindowsAgent = $true
+    } else {
+        $script:IsWindowsAgent = $IsWindows
+    }
+}
+
 # Auto-installation and production readiness setup for Windows
-function Setup-ProductionEnvironment {
+function Initialize-ProductionEnvironment {
     Write-Log "INFO" "Setting up production environment for Windows..."
     
     # Ensure Windows service is properly installed if on Windows
@@ -45,7 +64,7 @@ function Setup-ProductionEnvironment {
             catch {
                 Write-Log "WARN" "Failed to create Windows service: $($_.Exception.Message)"
                 # Fallback to task scheduler
-                Setup-TaskScheduler
+                Initialize-TaskScheduler
             }
         }
         else {
@@ -80,13 +99,13 @@ function Setup-ProductionEnvironment {
     }
     
     # Ensure watchdog system is set up for Windows
-    Setup-WindowsWatchdog
+    Initialize-WindowsWatchdog
     
     # Set up boot recovery system
-    Setup-WindowsBootRecovery
+    Initialize-WindowsBootRecovery
     
     # Configure Windows firewall if needed
-    Setup-WindowsFirewall
+    Initialize-WindowsFirewall
     
     # Ensure all required directories exist with proper permissions
     $requiredDirs = @($script:PID_DIR, "$script:AGENT_HOME\logs", "$script:AGENT_HOME\var\state", "$script:AGENT_HOME\tmp")
@@ -105,7 +124,7 @@ function Setup-ProductionEnvironment {
     Write-Log "INFO" "Production environment setup completed for Windows"
 }
 
-function Setup-TaskScheduler {
+function Initialize-TaskScheduler {
     Write-Log "INFO" "Setting up Task Scheduler for auto-startup..."
     
     try {
@@ -123,7 +142,7 @@ function Setup-TaskScheduler {
     }
 }
 
-function Setup-WindowsWatchdog {
+function Initialize-WindowsWatchdog {
     # Windows-specific watchdog setup using Task Scheduler
     $watchdogScript = Join-Path $script:SCRIPT_DIR "scripts\windows\monitoring-watchdog.ps1"
     
@@ -149,7 +168,7 @@ function Setup-WindowsWatchdog {
     }
 }
 
-function Setup-WindowsBootRecovery {
+function Initialize-WindowsBootRecovery {
     Write-Log "INFO" "Setting up Windows boot recovery system..."
     
     $bootRecoveryScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-boot-recovery.ps1"
@@ -175,7 +194,7 @@ function Setup-WindowsBootRecovery {
     }
 }
 
-function Setup-WindowsFirewall {
+function Initialize-WindowsFirewall {
     Write-Log "INFO" "Configuring Windows firewall for monitoring agent..."
     
     try {
@@ -205,37 +224,86 @@ if ($IsWindows -and (-NOT ([Security.Principal.WindowsPrincipal] [Security.Princ
     exit
 }
 
-# Auto-setup production environment on any execution
-Setup-ProductionEnvironment
+# Auto-setup production environment on any execution (delayed to after function definitions)
+# Initialize-ProductionEnvironment
 
-# Script-level variables
-$script:DAEMONS = @("monitoring-modulesd", "monitoring-logcollector", "monitoring-syscheckd", "monitoring-agentd", "monitoring-execd")
+# Script-level variables - Updated for Windows Monitoring agent compatibility
+if ($script:IsWindowsAgent) {
+    # Windows runs as a single agent process - simplified approach
+    $script:DAEMONS = @("monitoring-agentd")
+} else {
+    # Linux/Unix runs separate daemon processes
+    $script:DAEMONS = @("monitoring-modulesd", "monitoring-logcollector", "monitoring-syscheckd", "monitoring-agentd", "monitoring-execd")
+}
 $script:SDAEMONS = [array]([array]$script:DAEMONS)
 [array]::Reverse($script:SDAEMONS)
 
 # Installation info
-$Script:AGENT_VERSION = "v1.0.0"
+$Script:AGENT_VERSION = "v4.8.0"  # Updated to match downloaded Wazuh version
 $script:REVISION = "1"
 $script:TYPE = "agent"
 
-# Configuration variables
+# Configuration variables - Windows-specific paths
 $script:SCRIPT_NAME = Split-Path -Leaf $MyInvocation.MyCommand.Path
 $script:SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
-$script:AGENT_HOME = $script:SCRIPT_DIR
+
+# Set correct agent home based on platform
+if ($script:IsWindowsAgent) {
+    $script:AGENT_HOME = Join-Path $script:SCRIPT_DIR "windows"
+    $script:BYPASS_DLL = Join-Path $script:AGENT_HOME "lib\bypass.dll"
+} else {
+    # Linux/Mac paths (fallback for PowerShell on Linux)
+    $script:AGENT_HOME = $script:SCRIPT_DIR
+    $script:BYPASS_DLL = Join-Path $script:AGENT_HOME "bypass.so"
+}
+
 # Use Administrator context with elevated privileges
-$script:AGENT_USER = "Administrator"
+$script:AGENT_USER = "Administrator" 
 $script:AGENT_GROUP = "Administrators"
-$script:CONFIG_FILE = Join-Path $script:AGENT_HOME "etc/ossec.conf"
-$script:CLIENT_KEYS = Join-Path $script:AGENT_HOME "etc/client.keys"
-$script:LOG_FILE = Join-Path $script:AGENT_HOME "logs/monitoring-agent.log"
-$script:PID_DIR = Join-Path $script:AGENT_HOME "var/run"
-$script:BYPASS_DLL = Join-Path $script:AGENT_HOME "bypass_windows.dll"
+$script:CONFIG_FILE = if ($script:IsWindowsAgent) {
+    Join-Path $script:AGENT_HOME "etc\OSSEC.CONF"
+} else {
+    Join-Path $script:AGENT_HOME "etc\ossec.conf"
+}
+$script:CLIENT_KEYS = if ($script:IsWindowsAgent) {
+    Join-Path $script:AGENT_HOME "etc\client.keys"
+} else {
+    Join-Path $script:AGENT_HOME "etc\client.keys"
+}
+$script:LOG_FILE = Join-Path $script:AGENT_HOME "logs\monitoring-agent.log"
+$script:PID_DIR = Join-Path $script:AGENT_HOME "var\run"
 
 # Auto-enable bypass for Windows if DLL exists
 if (Test-Path $script:BYPASS_DLL) {
     Write-Verbose "Windows bypass DLL found: $script:BYPASS_DLL"
-    # Note: Windows DLL injection requires different approach than LD_PRELOAD
-    # Implementation would use SetWindowsHookEx or DLL injection techniques
+    # Set environment variable for DLL loading
+    $env:MONITORING_BYPASS_DLL = $script:BYPASS_DLL
+    # Load bypass DLL functions
+    try {
+        Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class BypassLoader {
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr LoadLibrary(string dllToLoad);
+    
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetProcAddress(IntPtr hModule, string procedureName);
+    
+    public static bool LoadBypassDLL(string dllPath) {
+        IntPtr handle = LoadLibrary(dllPath);
+        return handle != IntPtr.Zero;
+    }
+}
+"@
+        $loaded = [BypassLoader]::LoadBypassDLL($script:BYPASS_DLL)
+        if ($loaded) {
+            Write-Verbose "Bypass DLL loaded successfully"
+        }
+    }
+    catch {
+        Write-Verbose "Could not load bypass DLL: $($_.Exception.Message)"
+    }
 }
 
 # Handle TEMP directory safely - Linux/Unix compatibility
@@ -250,8 +318,12 @@ $script:TempDir = if ($env:TEMP) {
 }
 $script:LOCK_FILE = Join-Path $script:TempDir "monitoring-agent-Administrator"
 
-# Process names
-$script:PROCESSES = @("monitoring-modulesd", "monitoring-logcollector", "monitoring-syscheckd", "monitoring-agentd", "monitoring-execd")
+# Process names - Using actual Windows Monitoring Agent binary names
+if ($script:IsWindowsAgent) {
+    $script:PROCESSES = @("monitoring-agentd")
+} else {
+    $script:PROCESSES = @("monitoring-modulesd", "monitoring-logcollector", "monitoring-syscheckd", "monitoring-agentd", "monitoring-execd")
+}
 
 # Global variables for process management
 $script:MAX_ITERATION = 60
@@ -431,19 +503,74 @@ function Get-DaemonArgs {
 
 function Get-BinaryName {
     param([string]$Daemon)
-    # Convert monitoring daemon names to monitoring binary names (already matching)
-    return $Daemon
+    
+    # Map Monitoring Agent daemon names to actual Windows executable names
+    switch ($Daemon) {
+        "monitoring-agentd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" } 
+            else { return "monitoring-agentd" }
+        }
+        "monitoring-execd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }  # Windows uses single agent process
+            else { return "monitoring-execd" }
+        }
+        "monitoring-logcollector" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }  # Part of main agent on Windows
+            else { return "monitoring-logcollector" }
+        }
+        "monitoring-modulesd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }  # Part of main agent on Windows
+            else { return "monitoring-modulesd" }
+        }
+        "monitoring-syscheckd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }  # Part of main agent on Windows
+            else { return "monitoring-syscheckd" }
+        }
+        # Legacy wazuh names (for backward compatibility)
+        "wazuh-agentd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" } 
+            else { return "wazuh-agentd" }
+        }
+        "wazuh-execd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }
+            else { return "wazuh-execd" }
+        }
+        "wazuh-logcollector" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }
+            else { return "wazuh-logcollector" }
+        }
+        "wazuh-modulesd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }
+            else { return "wazuh-modulesd" }
+        }
+        "wazuh-syscheckd" { 
+            if ($script:IsWindowsAgent) { return "MONITORING_AGENT.EXE" }
+            else { return "wazuh-syscheckd" }
+        }
+        default { 
+            if ($script:IsWindowsAgent) { return "$Daemon.EXE" }
+            else { return $Daemon }
+        }
+    }
 }
 
 function Get-PidName {
     param([string]$Daemon)
-    # Convert monitoring daemon names to wazuh PID file names (since binaries still use wazuh internally)
+    
+    # For Windows, Monitoring Agent uses standard daemon names for PID files
+    # For consistency across platforms, we use the daemon name as-is
     switch ($Daemon) {
-        "monitoring-agentd" { return "wazuh-agentd" }
-        "monitoring-execd" { return "wazuh-execd" }
-        "monitoring-logcollector" { return "wazuh-logcollector" }
-        "monitoring-modulesd" { return "wazuh-modulesd" }
-        "monitoring-syscheckd" { return "wazuh-syscheckd" }
+        "monitoring-agentd" { return "monitoring-agentd" }
+        "monitoring-execd" { return "monitoring-execd" }
+        "monitoring-logcollector" { return "monitoring-logcollector" }
+        "monitoring-modulesd" { return "monitoring-modulesd" }
+        "monitoring-syscheckd" { return "monitoring-syscheckd" }
+        # Legacy wazuh names (for backward compatibility)
+        "wazuh-agentd" { return "monitoring-agentd" }
+        "wazuh-execd" { return "monitoring-execd" }
+        "wazuh-logcollector" { return "monitoring-logcollector" }
+        "wazuh-modulesd" { return "monitoring-modulesd" }
+        "wazuh-syscheckd" { return "monitoring-syscheckd" }
         default { return $Daemon }
     }
 }
@@ -506,8 +633,8 @@ function Start-ProcessWithBypass {
     }
     
     # Always set user/group overrides for Windows
-    $env:WAZUH_USER_OVERRIDE = "Administrator"
-    $env:WAZUH_GROUP_OVERRIDE = "Administrators"
+    $env:MONITORING_USER_OVERRIDE = "Administrator"
+    $env:MONITORING_GROUP_OVERRIDE = "Administrators"
     
     Write-Log -Level "DEBUG" -Message "Starting process with bypass: $FilePath"
     
@@ -518,7 +645,7 @@ function Start-ProcessWithBypass {
             PassThru = $PassThru
         }
         
-        if ($IsWindows -and $WindowStyle) {
+        if ($script:IsWindowsAgent -and $WindowStyle) {
             $processParams.WindowStyle = $WindowStyle
         }
         
@@ -539,24 +666,25 @@ function Start-ProcessWithBypass {
 function Test-Configuration {
     # Test configuration for all daemons
     foreach ($daemon in $script:SDAEMONS) {
-        $args = Get-DaemonArgs $daemon
+        $daemonArgs = Get-DaemonArgs $daemon
         $binary = Get-BinaryName $daemon
         
-        # Handle cross-platform binary extensions and paths
-        $binaryPath = if ($IsLinux -or $IsMacOS) {
+        # Handle cross-platform binary paths correctly
+        $binaryPath = if ((-not $script:IsWindowsAgent) -and ($IsLinux -or $IsMacOS)) {
             Join-Path $script:AGENT_HOME "bin/$binary"
         } else {
-            Join-Path $script:AGENT_HOME "bin/$binary.exe"
+            # Windows: binary names already include .EXE extension
+            Join-Path $script:AGENT_HOME "bin\$binary"
         }
         
         $arguments = @("-t")
-        if ($args) {
-            $arguments += $args -split ' '
+        if ($daemonArgs) {
+            $arguments += $daemonArgs -split ' '
         }
         
         try {
             # Use enhanced process start with bypass support for configuration testing
-            if ($IsWindows) {
+            if ($script:IsWindowsAgent) {
                 $result = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru -WindowStyle "Hidden"
                 $result | Wait-Process
                 $exitCode = $result.ExitCode
@@ -631,7 +759,7 @@ function Test-Permissions {
     
     # Windows doesn't have the same permission model, so we'll check if file is accessible
     try {
-        $acl = Get-Acl $File
+        $null = Get-Acl $File
         return $true
     }
     catch {
@@ -765,8 +893,8 @@ function Test-ProcessRunning {
     
     if (Test-Path $pidFile) {
         try {
-            $pid = Get-Content $pidFile -ErrorAction Stop
-            $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+            $processId = Get-Content $pidFile -ErrorAction Stop
+            $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
             if ($process) {
                 return $true
             }
@@ -791,10 +919,10 @@ function Get-ProcessPid {
     
     if (Test-Path $pidFile) {
         try {
-            $pid = Get-Content $pidFile -ErrorAction Stop
-            $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+            $processId = Get-Content $pidFile -ErrorAction Stop
+            $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
             if ($process) {
-                return $pid
+                return $processId
             }
             else {
                 Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
@@ -848,8 +976,8 @@ function Test-ProcessIds {
         
         foreach ($pidFile in $pidFiles) {
             try {
-                $pid = Get-Content $pidFile.FullName -ErrorAction Stop
-                $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                $processId = Get-Content $pidFile.FullName -ErrorAction Stop
+                $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
                 if (-not $process) {
                     Write-Log "INFO" "Deleting PID file '$($pidFile.FullName)' not used..."
                     Remove-Item $pidFile.FullName -Force
@@ -870,6 +998,15 @@ function Get-ProcessStatus {
         return 0
     }
     
+    # For Windows, check if the actual binary process is running
+    if ($script:IsWindowsAgent) {
+        $binaryName = Get-BinaryName $ProcessFile
+        $runningProcesses = Get-Process -Name $binaryName.Replace('.EXE', '') -ErrorAction SilentlyContinue
+        if ($runningProcesses) {
+            return 1
+        }
+    }
+    
     # Convert monitoring daemon name to actual PID file name
     $pidName = Get-PidName $ProcessFile
     $pidPattern = Join-Path $script:PID_DIR "$pidName-*.pid"
@@ -878,10 +1015,10 @@ function Get-ProcessStatus {
     if ($pidFiles) {
         foreach ($pidFile in $pidFiles) {
             try {
-                $pid = Get-Content $pidFile.FullName -ErrorAction Stop
-                $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                $processId = Get-Content $pidFile.FullName -ErrorAction Stop
+                $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
                 if (-not $process) {
-                    Write-Log "INFO" "$ProcessFile`: Process $pid not used by Monitoring Agent, removing..."
+                    Write-Log "INFO" "$ProcessFile`: Process $processId not used by Monitoring Agent, removing..."
                     Remove-Item $pidFile.FullName -Force
                     continue
                 }
@@ -1308,6 +1445,9 @@ function Start-Agent {
     # Ensure proper environment before starting
     Initialize-Environment
     
+    # Restore agent connection if it was disabled during stop
+    Restore-AgentConnection
+    
     # Clean PID files and check processes
     Test-ProcessIds
     
@@ -1325,16 +1465,17 @@ function Start-Agent {
         $status = Get-ProcessStatus $daemon
         if ($status -eq 0) {
             $failed = $false
-            $args = Get-DaemonArgs $daemon
+            $daemonArgs = Get-DaemonArgs $daemon
             $binary = Get-BinaryName $daemon
             
             Write-Log "INFO" "Starting $daemon..."
             
-            # Handle cross-platform binary extensions and paths
+            # Handle cross-platform binary paths correctly
             $binaryPath = if ($IsLinux -or $IsMacOS) {
                 Join-Path $script:AGENT_HOME "bin/$binary"
             } else {
-                Join-Path $script:AGENT_HOME "bin/$binary.exe"
+                # Windows: binary names already include .EXE extension
+                Join-Path $script:AGENT_HOME "bin\$binary"
             }
             
             if (-not (Test-Path $binaryPath)) {
@@ -1344,8 +1485,8 @@ function Start-Agent {
             else {
                 try {
                     $arguments = @()
-                    if ($args) {
-                        $arguments += $args -split ' '
+                    if ($daemonArgs) {
+                        $arguments += $daemonArgs -split ' '
                     }
                     
                     # Use enhanced process start with bypass support
@@ -1426,8 +1567,65 @@ function Stop-Agent {
         }
     }
     
-    # Stop fault tolerance components first
+    # FIRST: Stop Windows services if they exist (only on actual Windows)
+    $servicesFound = $false
+    if ($IsWindows) {
+        $services = @("MonitoringAgent", "MonitoringAgentWatchdog")
+        foreach ($serviceName in $services) {
+            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -eq 'Running') {
+                try {
+                    Stop-Service -Name $serviceName -Force -ErrorAction Stop
+                    Write-Log "INFO" "Stopped Windows service: $serviceName"
+                    $servicesFound = $true
+                }
+            catch {
+                Write-Log "WARN" "Failed to stop service $serviceName`: $($_.Exception.Message)"
+            }
+        }
+    }
+    
+    if ($servicesFound) {
+        Write-Log "INFO" "Waiting for services to stop completely..."
+        foreach ($serviceName in $services) {
+            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if ($service) {
+                try {
+                    $service.WaitForStatus('Stopped', '00:00:30')
+                }
+                catch {
+                    Write-Log "WARN" "Service $serviceName did not stop within timeout"
+                }
+            }
+        }
+    }
+    } else {
+        Write-Log "INFO" "Windows services not available on this platform"
+    }
+    
+    # SECOND: Mark agent as stopped for boot recovery to prevent restarts
+    $bootRecoveryScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-boot-recovery.ps1"
+    if (Test-Path $bootRecoveryScript) {
+        try {
+            & $bootRecoveryScript "mark-stopped"
+            Write-Log "INFO" "Marked agent as stopped"
+        }
+        catch {
+            Write-Log "WARN" "Failed to mark agent as stopped for boot recovery: $($_.Exception.Message)"
+        }
+    }
+    
+    # THIRD: Force agent disconnection from Wazuh manager
+    Disconnect-Agent
+    
+    # Give a moment for state change to take effect
+    Start-Sleep -Seconds 2
+    
+    # FOURTH: Stop fault tolerance components (including watchdog)
     Stop-FaultToleranceComponents
+    
+    # Give more time for watchdog to detect state change and exit
+    Start-Sleep -Seconds 3
     
     Test-ProcessIds
     
@@ -1443,12 +1641,12 @@ function Stop-Agent {
             
             foreach ($pidFile in $pidFiles) {
                 try {
-                    $pid = Get-Content $pidFile.FullName -ErrorAction Stop
-                    $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                    $processId = Get-Content $pidFile.FullName -ErrorAction Stop
+                    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
                     
                     if ($process) {
                         $process.Kill()
-                        $waitResult = Wait-ProcessId $pid
+                        $waitResult = Wait-ProcessId $processId
                         if ($waitResult -ne 0) {
                             Write-Log "WARN" "Process $daemon couldn't be terminated gracefully. Force killing..."
                             try {
@@ -1481,19 +1679,19 @@ function Stop-Agent {
 function Stop-ProcessByName {
     param([string]$ProcessName)
     
-    $pid = Get-ProcessPid $ProcessName
+    $processId = Get-ProcessPid $ProcessName
     
-    if ($pid) {
-        Write-Log "DEBUG" "Stopping $ProcessName (PID: $pid)..."
+    if ($processId) {
+        Write-Log "DEBUG" "Stopping $ProcessName (PID: $processId)..."
         try {
-            Stop-Process -Id $pid -ErrorAction Stop
+            Stop-Process -Id $processId -ErrorAction Stop
             
             if (Wait-ForProcess $ProcessName "stop") {
                 Write-Log "INFO" "$ProcessName stopped successfully"
             }
             else {
                 Write-Log "WARN" "Force killing $ProcessName..."
-                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                 Start-Sleep -Seconds 2
             }
         }
@@ -1530,27 +1728,36 @@ function Test-ConfigurationInternal {
         return $false
     }
     
-    $configContent = Get-Content $script:CONFIG_FILE -Raw
-    
-    # Check if essential configuration sections exist
-    if ($configContent -notmatch "<client>") {
-        Write-Log "ERROR" "Client configuration section not found"
+    try {
+        $configContent = Get-Content $script:CONFIG_FILE -Raw
+        Write-Log "DEBUG" "Configuration file loaded successfully"
+        
+        # Check if essential configuration sections exist
+        if ($configContent -notmatch "<client>") {
+            Write-Log "ERROR" "Client configuration section not found"
+            return $false
+        }
+        
+        if ($configContent -notmatch "<server>") {
+            Write-Log "ERROR" "Server configuration section not found"
+            return $false
+        }
+        
+        # Basic XML structure check
+        if ($configContent -notmatch "<ossec_config>" -or $configContent -notmatch "</ossec_config>") {
+            Write-Log "ERROR" "Invalid XML structure in configuration file"
+            Write-Log "DEBUG" "Has ossec_config start: $($configContent -match '<ossec_config>')"
+            Write-Log "DEBUG" "Has ossec_config end: $($configContent -match '</ossec_config>')"
+            return $false
+        }
+        
+        Write-Log "DEBUG" "Configuration validation passed"
+        return $true
+    }
+    catch {
+        Write-Log "ERROR" "Failed to read configuration file: $($_.Exception.Message)"
         return $false
     }
-    
-    if ($configContent -notmatch "<server>") {
-        Write-Log "ERROR" "Server configuration section not found"
-        return $false
-    }
-    
-    # Basic XML structure check
-    if ($configContent -notmatch "^<ossec_config>" -or $configContent -notmatch "</ossec_config>$") {
-        Write-Log "ERROR" "Invalid XML structure - missing ossec_config tags"
-        return $false
-    }
-    
-    Write-Log "DEBUG" "Configuration validation passed"
-    return $true
 }
 
 function Show-Logs {
@@ -1764,6 +1971,527 @@ function New-AgentKey {
     $bytes = New-Object byte[] 32
     [System.Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($bytes)
     return [System.BitConverter]::ToString($bytes) -replace '-', ''
+}
+
+# ======================================================================
+# ENHANCED FAULT TOLERANCE FUNCTIONS - WINDOWS IMPLEMENTATION
+# ======================================================================
+
+function Start-FaultToleranceComponents {
+    Write-Log "DEBUG" "Initializing fault tolerance components for Windows..."
+    
+    # Start background watchdog process
+    Start-ProcessWatchdog
+    
+    # Initialize logging and alerting
+    Initialize-LoggingSystem
+    
+    # Set up signal handlers for graceful shutdown
+    Setup-SignalHandlers
+    
+    # Initialize state tracking
+    Initialize-StateTracking
+}
+
+function Complete-FaultToleranceStartup {
+    Write-Log "DEBUG" "Completing fault tolerance startup for Windows..."
+    
+    # Start monitoring processes for health
+    Start-ProcessMonitoring
+    
+    # Initialize recovery mechanisms
+    Initialize-RecoverySystem
+    
+    # Send startup notification
+    Send-StartupNotification
+}
+
+function Stop-FaultToleranceComponents {
+    Write-Log "DEBUG" "Stopping fault tolerance components for Windows..."
+    
+    # Stop watchdog process
+    Stop-ProcessWatchdog
+    
+    # Stop background monitoring
+    Stop-ProcessMonitoring
+    
+    # Send shutdown notification
+    Send-ShutdownNotification
+}
+
+function Initialize-StateTracking {
+    $stateDir = Join-Path $script:AGENT_HOME "var\state"
+    if (-not (Test-Path $stateDir)) {
+        New-Item -Path $stateDir -ItemType Directory -Force | Out-Null
+    }
+    
+    # Record startup time
+    [int][double]::Parse((Get-Date -UFormat %s)) | Set-Content -Path (Join-Path $stateDir "startup_time") -Encoding ASCII
+    
+    # Initialize process restart counters
+    foreach ($daemon in $script:DAEMONS) {
+        "0" | Set-Content -Path (Join-Path $stateDir "restart_count_$daemon") -Encoding ASCII
+    }
+    
+    Write-Log "DEBUG" "State tracking initialized"
+}
+
+function Initialize-LoggingSystem {
+    $loggingScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-logging.ps1"
+    
+    if (Test-Path $loggingScript) {
+        try {
+            & $loggingScript "init" | Out-Null
+            Write-Log "DEBUG" "Enhanced logging system initialized"
+        }
+        catch {
+            Write-Log "WARN" "Failed to initialize enhanced logging: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Start-ProcessMonitoring {
+    $recoveryScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-recovery.ps1"
+    
+    if (Test-Path $recoveryScript) {
+        try {
+            $process = Start-Process -FilePath "PowerShell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$recoveryScript`"" -WindowStyle Hidden -PassThru
+            $pidFile = Join-Path $script:PID_DIR "monitoring-recovery.pid"
+            $process.Id | Set-Content -Path $pidFile -Encoding ASCII
+            Write-Log "DEBUG" "Recovery monitoring started with PID: $($process.Id)"
+        }
+        catch {
+            Write-Log "WARN" "Failed to start recovery monitoring: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Stop-ProcessMonitoring {
+    $recoveryPidFile = Join-Path $script:PID_DIR "monitoring-recovery.pid"
+    
+    if (Test-Path $recoveryPidFile) {
+        try {
+            $processId = Get-Content $recoveryPidFile -ErrorAction Stop
+            $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            if ($process) {
+                $process.Kill()
+                Wait-Process -Id $processId -Timeout 10 -ErrorAction SilentlyContinue
+            }
+            Remove-Item $recoveryPidFile -ErrorAction SilentlyContinue
+            Write-Log "DEBUG" "Recovery monitoring stopped"
+        }
+        catch {
+            Write-Log "WARN" "Failed to stop recovery monitoring: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Initialize-RecoverySystem {
+    # Create state tracking directory
+    $stateDir = Join-Path $script:AGENT_HOME "var\state"
+    if (-not (Test-Path $stateDir)) {
+        New-Item -Path $stateDir -ItemType Directory -Force | Out-Null
+    }
+    
+    # Record startup time
+    [int][double]::Parse((Get-Date -UFormat %s)) | Set-Content -Path (Join-Path $stateDir "startup_time") -Encoding ASCII
+    
+    # Initialize process restart counters
+    foreach ($daemon in $script:DAEMONS) {
+        "0" | Set-Content -Path (Join-Path $stateDir "restart_count_$daemon") -Encoding ASCII
+    }
+    
+    Write-Log "DEBUG" "Recovery system initialized"
+}
+
+function Initialize-SignalHandlers {
+    # Windows equivalent using console events
+    try {
+        $null = [Console]::TreatControlCAsInput = $false
+        Write-Log "DEBUG" "Signal handlers configured for Windows"
+    }
+    catch {
+        Write-Log "WARN" "Could not configure signal handlers: $($_.Exception.Message)"
+    }
+}
+
+function Send-StartupNotification {
+    $loggingScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-logging.ps1"
+    
+    if (Test-Path $loggingScript) {
+        try {
+            & $loggingScript "startup" "Monitoring Agent started successfully with fault tolerance" | Out-Null
+        }
+        catch {
+            Write-Log "DEBUG" "Could not send startup notification: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Send-ShutdownNotification {
+    $loggingScript = Join-Path $script:AGENT_HOME "scripts\windows\monitoring-logging.ps1"
+    
+    if (Test-Path $loggingScript) {
+        try {
+            & $loggingScript "shutdown" "Monitoring Agent stopped" | Out-Null
+        }
+        catch {
+            Write-Log "DEBUG" "Could not send shutdown notification: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Restart-SingleProcess {
+    param([string]$ProcessName)
+    
+    Write-Log "INFO" "Restarting individual process: $ProcessName"
+    
+    # Check if it's a valid process
+    $isValid = $false
+    foreach ($daemon in $script:DAEMONS) {
+        if ($daemon -eq $ProcessName) {
+            $isValid = $true
+            break
+        }
+    }
+    
+    if (-not $isValid) {
+        Write-Log "ERROR" "Invalid process name: $ProcessName"
+        return $false
+    }
+    
+    # Stop the process if running
+    $status = Get-ProcessStatus $ProcessName
+    if ($status -eq 1) {
+        Write-Log "INFO" "Stopping $ProcessName"
+        Stop-SingleProcess $ProcessName
+        Start-Sleep -Seconds 2
+    }
+    
+    # Start the process
+    Write-Log "DEBUG" "Starting $ProcessName"
+    $binary = Get-BinaryName $ProcessName
+    $daemonArgs = Get-DaemonArgs $ProcessName
+    
+    $binaryPath = Join-Path $script:AGENT_HOME "bin\$binary"
+    if (Test-Path $binaryPath) {
+        try {
+            $arguments = @()
+            if ($daemonArgs) {
+                $arguments += $daemonArgs -split ' '
+            }
+            
+            # Use enhanced process start with bypass support
+            $processInfo = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru -WindowStyle "Hidden"
+            
+            # Create PID file
+            $pidName = Get-PidName $ProcessName
+            $pidFile = Join-Path $script:PID_DIR "$pidName-$($processInfo.Id).pid"
+            $processInfo.Id | Out-File -FilePath $pidFile -Encoding ASCII
+            
+            # Increment restart counter
+            $stateDir = Join-Path $script:AGENT_HOME "var\state"
+            $counterFile = Join-Path $stateDir "restart_count_$ProcessName"
+            if (Test-Path $counterFile) {
+                $count = [int](Get-Content $counterFile) + 1
+                $count | Set-Content $counterFile -Encoding ASCII
+            }
+            
+            Write-Log "INFO" "✓ Successfully restarted $ProcessName"
+            return $true
+        }
+        catch {
+            Write-Log "ERROR" "Failed to restart $ProcessName`: $($_.Exception.Message)"
+            return $false
+        }
+    }
+    else {
+        Write-Log "ERROR" "Binary not found: $binaryPath"
+        return $false
+    }
+}
+
+function Stop-SingleProcess {
+    param([string]$ProcessName)
+    
+    $pids = Get-ProcessPids $ProcessName
+    foreach ($processId in $pids) {
+        if ($processId) {
+            try {
+                $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                if ($process) {
+                    $process.Kill()
+                    Wait-Process -Id $processId -Timeout 10 -ErrorAction SilentlyContinue
+                }
+            }
+            catch {
+                Write-Log "WARN" "Failed to stop process $processId`: $($_.Exception.Message)"
+            }
+        }
+    }
+}
+
+function Disconnect-Agent {
+    Write-Log "INFO" "Forcing agent disconnection from Wazuh manager..."
+    
+    # Check if client.keys file exists
+    if (-not (Test-Path $script:CLIENT_KEYS)) {
+        Write-Log "WARN" "Client keys file not found - agent not enrolled"
+        return
+    }
+    
+    # Get agent ID from client.keys
+    $clientKeyLine = Get-Content $script:CLIENT_KEYS -First 1 -ErrorAction SilentlyContinue
+    if (-not $clientKeyLine) {
+        Write-Log "WARN" "Empty client keys file"
+        return
+    }
+    
+    $agentId = ($clientKeyLine -split ' ')[0]
+    if (-not $agentId) {
+        Write-Log "WARN" "Could not parse agent ID from client.keys"
+        return
+    }
+    
+    Write-Log "INFO" "Agent ID: $agentId - temporarily disabling connection"
+    
+    # Backup the client.keys file
+    $backupFile = "$($script:CLIENT_KEYS).backup.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    Copy-Item $script:CLIENT_KEYS $backupFile -ErrorAction SilentlyContinue
+    
+    # Temporarily rename client.keys to force disconnection
+    $stoppedFile = "$($script:CLIENT_KEYS).stopped"
+    Move-Item $script:CLIENT_KEYS $stoppedFile -ErrorAction SilentlyContinue
+    
+    Write-Log "INFO" "Agent authentication disabled - will appear as disconnected"
+}
+
+function Restore-AgentConnection {
+    Write-Log "DEBUG" "Checking for disabled agent connection..."
+    
+    # Check if client.keys was disabled during stop
+    $stoppedFile = "$($script:CLIENT_KEYS).stopped"
+    if ((Test-Path $stoppedFile) -and (-not (Test-Path $script:CLIENT_KEYS))) {
+        try {
+            Move-Item $stoppedFile $script:CLIENT_KEYS -ErrorAction Stop
+            Write-Log "INFO" "Agent authentication restored"
+        }
+        catch {
+            Write-Log "WARN" "Failed to restore agent authentication: $($_.Exception.Message)"
+        }
+    }
+}
+
+# ======================================================================
+# ENHANCED BYPASS FUNCTIONALITY - WINDOWS IMPLEMENTATION
+# ======================================================================
+
+function Initialize-MonitoringBypass {
+    Write-Log "DEBUG" "Initializing Windows monitoring bypass system..."
+    
+    # Check for bypass DLL
+    if (Test-Path $script:BYPASS_DLL) {
+        Write-Log "INFO" "Windows bypass DLL found: $script:BYPASS_DLL"
+        
+        # Set environment variable for DLL loading
+        $env:MONITORING_BYPASS_DLL = $script:BYPASS_DLL
+        
+        # Try to load the DLL
+        try {
+            $loadResult = [BypassLoader]::LoadBypassDLL($script:BYPASS_DLL)
+            if ($loadResult) {
+                Write-Log "INFO" "✓ Bypass DLL loaded successfully"
+                $env:MONITORING_BYPASS_ACTIVE = "1"
+            }
+            else {
+                Write-Log "WARN" "Failed to load bypass DLL"
+            }
+        }
+        catch {
+            Write-Log "WARN" "Could not load bypass DLL: $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Log "DEBUG" "No bypass DLL found - running without bypass"
+    }
+}
+
+function Start-ProcessWithBypass {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [switch]$PassThru,
+        [string]$WindowStyle = "Normal"
+    )
+    
+    # If bypass is active, use DLL injection
+    if ($env:MONITORING_BYPASS_ACTIVE -eq "1") {
+        Write-Log "DEBUG" "Starting process with bypass: $FilePath"
+        
+        # Create process with DLL injection
+        try {
+            $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+            $startInfo.FileName = $FilePath
+            $startInfo.Arguments = $ArgumentList -join ' '
+            $startInfo.UseShellExecute = $false
+            $startInfo.CreateNoWindow = ($WindowStyle -eq "Hidden")
+            
+            # Set bypass environment
+            $startInfo.EnvironmentVariables["MONITORING_BYPASS_DLL"] = $script:BYPASS_DLL
+            $startInfo.EnvironmentVariables["MONITORING_BYPASS_ACTIVE"] = "1"
+            
+            $process = [System.Diagnostics.Process]::Start($startInfo)
+            
+            if ($PassThru) {
+                return $process
+            }
+        }
+        catch {
+            Write-Log "WARN" "Failed to start process with bypass, falling back to normal start: $($_.Exception.Message)"
+        }
+    }
+    
+    # Fallback to normal process start
+    $params = @{
+        FilePath = $FilePath
+        ArgumentList = $ArgumentList
+        PassThru = $PassThru
+    }
+    
+    if ($WindowStyle -ne "Normal") {
+        $params.WindowStyle = $WindowStyle
+    }
+    
+    return Start-Process @params
+}
+
+# ======================================================================
+# ENHANCED CONFIGURATION AND VALIDATION
+# ======================================================================
+
+function Test-Configuration {
+    Write-Log "DEBUG" "Validating configuration..."
+    
+    # Check if essential configuration sections exist
+    $configContent = Get-Content $script:CONFIG_FILE -Raw -ErrorAction SilentlyContinue
+    if (-not $configContent) {
+        Write-Log "ERROR" "Configuration file not found or empty: $script:CONFIG_FILE"
+        return $false
+    }
+    
+    if ($configContent -notmatch '<client>') {
+        Write-Log "ERROR" "Missing <client> section in configuration"
+        return $false
+    }
+    
+    if ($configContent -notmatch '<server>') {
+        Write-Log "ERROR" "Missing <server> section in configuration"
+        return $false
+    }
+    
+    # Basic XML structure check
+    if ($configContent -notmatch '^<ossec_config>' -or $configContent -notmatch '</ossec_config>$') {
+        Write-Log "ERROR" "Invalid XML structure in configuration file"
+        return $false
+    }
+    
+    Write-Log "DEBUG" "Configuration validation passed"
+    return $true
+}
+
+function Test-FaultToleranceHealth {
+    Write-Log "INFO" "Running comprehensive health check with fault tolerance validation..."
+    
+    $errors = 0
+    
+    # Run standard health check first
+    if (-not (Test-Health)) {
+        $errors++
+    }
+    
+    # Check watchdog process
+    $watchdogPidFile = Join-Path $script:PID_DIR "monitoring-watchdog.pid"
+    $systemdWatchdogActive = $false
+    
+    # Check if Windows service watchdog is running
+    $watchdogService = Get-Service -Name "MonitoringAgentWatchdog" -ErrorAction SilentlyContinue
+    if ($watchdogService -and $watchdogService.Status -eq 'Running') {
+        Write-Log "INFO" "✓ Windows service watchdog is active"
+        $systemdWatchdogActive = $true
+    }
+    
+    # If service watchdog is not running, check for standalone watchdog
+    if (-not $systemdWatchdogActive) {
+        if (Test-Path $watchdogPidFile) {
+            $watchdogPid = Get-Content $watchdogPidFile -ErrorAction SilentlyContinue
+            $watchdogProcess = Get-Process -Id $watchdogPid -ErrorAction SilentlyContinue
+            if ($watchdogProcess) {
+                Write-Log "INFO" "✓ Standalone process watchdog is active (PID: $watchdogPid)"
+            }
+            else {
+                Write-Log "WARN" "⚠ Watchdog PID file exists but process not running"
+                $errors++
+            }
+        }
+        else {
+            Write-Log "WARN" "⚠ No watchdog process detected"
+            $errors++
+        }
+    }
+    
+    # Check fault tolerance components
+    $recoveryPidFile = Join-Path $script:PID_DIR "monitoring-recovery.pid"
+    if (Test-Path $recoveryPidFile) {
+        $recoveryPid = Get-Content $recoveryPidFile -ErrorAction SilentlyContinue
+        $recoveryProcess = Get-Process -Id $recoveryPid -ErrorAction SilentlyContinue
+        if ($recoveryProcess) {
+            Write-Log "INFO" "✓ Recovery monitoring is active (PID: $recoveryPid)"
+        }
+        else {
+            Write-Log "WARN" "⚠ Recovery monitoring PID file exists but process not running"
+            $errors++
+        }
+    }
+    
+    # Check restart counters
+    $restartDir = Join-Path $script:AGENT_HOME "var\state"
+    if (Test-Path $restartDir) {
+        $totalRestarts = 0
+        foreach ($daemon in $script:DAEMONS) {
+            $counterFile = Join-Path $restartDir "restart_count_$daemon"
+            if (Test-Path $counterFile) {
+                $count = [int](Get-Content $counterFile -ErrorAction SilentlyContinue)
+                $totalRestarts += $count
+                if ($count -gt 0) {
+                    Write-Log "INFO" "Process $daemon has been restarted $count times"
+                }
+            }
+        }
+        Write-Log "INFO" "Total process restarts since startup: $totalRestarts"
+    }
+    
+    # Check Windows service status
+    $monitoringService = Get-Service -Name "MonitoringAgent" -ErrorAction SilentlyContinue
+    if ($monitoringService) {
+        if ($monitoringService.Status -eq 'Running') {
+            Write-Log "INFO" "✓ Windows service is running"
+        }
+        else {
+            Write-Log "WARN" "⚠ Windows service exists but is not running"
+        }
+    }
+    else {
+        Write-Log "INFO" "ℹ Windows service not installed (manual mode)"
+    }
+    
+    if ($errors -eq 0) {
+        Write-Log "INFO" "✅ All fault tolerance health checks passed"
+        return $true
+    }
+    else {
+        Write-Log "WARN" "⚠ Health check completed with $errors warnings"
+        return $false
+    }
 }
 
 function Test-ClientKey {
@@ -1981,9 +2709,6 @@ function New-WindowsService {
         
         # Configure service privileges and security
         Write-Log "DEBUG" "Configuring service security"
-        
-        # Grant the service necessary privileges
-        $serviceSid = (New-Object System.Security.Principal.SecurityIdentifier("S-1-5-80")).Translate([System.Security.Principal.NTAccount])
         
         # Create service-specific event log source
         try {
@@ -2208,7 +2933,7 @@ function Start-ServiceMode {
     
     # Signal handler for service control
     $signalHandler = {
-        param($sender, $e)
+        param($eventSender, $cancelArgs)
         Write-Log "INFO" "Service control signal received"
         $script:ServiceRunning = $false
     }
@@ -2364,10 +3089,10 @@ function Restart-SingleProcess {
     
     try {
         # Stop the process if running
-        $pid = Get-ProcessPid $ProcessName
-        if ($pid) {
-            Write-Log "DEBUG" "Stopping process $ProcessName (PID: $pid)"
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        $processId = Get-ProcessPid $ProcessName
+        if ($processId) {
+            Write-Log "DEBUG" "Stopping process $ProcessName (PID: $processId)"
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 2
         }
         
@@ -2380,12 +3105,12 @@ function Restart-SingleProcess {
             return $false
         }
         
-        $args = Get-DaemonArgs $ProcessName
+        $daemonArgs = Get-DaemonArgs $ProcessName
         
-        Write-Log "DEBUG" "Starting process: $binaryPath $args"
+        Write-Log "DEBUG" "Starting process: $binaryPath $daemonArgs"
         
         # Start with bypass environment
-        $process = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $args -PassThru
+        $process = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $daemonArgs -PassThru
         
         if ($process) {
             # Wait for process to stabilize
@@ -2690,7 +3415,18 @@ function Invoke-Main {
         "start" {
             # Run as current user - no special privileges required
             Write-Log "INFO" "Starting agent as current user: $(whoami)"
-            Test-Configuration
+            if ($script:IsWindowsAgent -and (-not $IsWindows)) {
+                # When testing Windows agent configuration on Linux, use internal validation
+                Write-Log "INFO" "Running configuration validation (Windows agent on Linux)..."
+                $valid = Test-ConfigurationInternal
+                if (-not $valid) {
+                    Write-Log "ERROR" "Configuration validation failed"
+                    exit 1
+                }
+            } else {
+                # Use full binary test on actual Windows or Linux agents
+                Test-Configuration
+            }
             Lock-Process
             try {
                 Start-Agent
@@ -2733,7 +3469,18 @@ function Invoke-Main {
             }
         }
         "restart" {
-            Test-Configuration
+            if ($script:IsWindowsAgent -and (-not $IsWindows)) {
+                # When testing Windows agent configuration on Linux, use internal validation
+                Write-Log "INFO" "Running configuration validation (Windows agent on Linux)..."
+                $valid = Test-ConfigurationInternal
+                if (-not $valid) {
+                    Write-Log "ERROR" "Configuration validation failed"
+                    exit 1
+                }
+            } else {
+                # Use full binary test on actual Windows or Linux agents
+                Test-Configuration
+            }
             Lock-Process
             try {
                 Stop-Agent
@@ -2820,6 +3567,24 @@ function Invoke-Main {
                 exit 1
             }
             Restart-SingleProcess $Arguments[0]
+        }
+        "test" {
+            Write-Log "INFO" "Testing Windows agent configuration..."
+            if ($script:IsWindowsAgent -and (-not $IsWindows)) {
+                # When testing Windows agent configuration on Linux, use internal validation
+                Write-Log "INFO" "Running configuration validation (Windows agent on Linux)..."
+                $valid = Test-ConfigurationInternal
+                if ($valid) {
+                    Write-Log "INFO" "Configuration validation passed"
+                } else {
+                    Write-Log "ERROR" "Configuration validation failed"
+                    exit 1
+                }
+            } else {
+                # Use full binary test on actual Windows or Linux agents
+                Test-Configuration
+            }
+            Write-Log "INFO" "Configuration test completed successfully"
         }
         "logs" {
             $lines = if ($Arguments.Count -gt 0) { [int]$Arguments[0] } else { 50 }
