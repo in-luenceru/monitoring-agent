@@ -225,6 +225,12 @@ generate_health_report() {
     log "INFO" "Health report generated: $report_file"
 }
 
+# Check if agent should be running based on state file
+should_agent_be_running() {
+    local state_file="${AGENT_HOME}/var/state/was_running"
+    [[ -f "$state_file" ]]
+}
+
 # Main monitoring loop
 main_loop() {
     log "INFO" "Monitoring Agent Watchdog started"
@@ -235,6 +241,11 @@ main_loop() {
     local last_health_report=0
     
     while true; do
+        # First check if we should continue monitoring
+        if ! should_agent_be_running; then
+            log "INFO" "Agent marked as stopped, watchdog exiting"
+            break
+        fi
         local current_time=$(date +%s)
         local down_processes=0
         local critical_down=0

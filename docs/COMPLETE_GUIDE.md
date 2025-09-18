@@ -517,63 +517,411 @@ tail -f logs/monitoring-logcollector.log
 
 ### Windows Installation
 
+The Windows Monitoring Agent provides the same professional functionality as the Linux version with full Windows integration.
+
+#### Method 1: Download and Extract (Recommended)
+
 ```powershell
 # Download and extract (PowerShell)
 Invoke-WebRequest -Uri "https://releases.monitoring-solutions.com/monitoring-agent-windows.zip" -OutFile "monitoring-agent.zip"
 Expand-Archive -Path "monitoring-agent.zip" -DestinationPath "C:\monitoring-agent"
 cd C:\monitoring-agent
 
-# Make executable (if needed)
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# Verify extraction
+Get-ChildItem
 ```
 
-### Windows Enrollment
+#### Method 2: Manual Extraction
+
+1. Download `monitoring-agent-windows.zip`
+2. Extract to `C:\monitoring-agent` (or your preferred location)
+3. Open PowerShell as Administrator
+4. Navigate to the agent directory
+
+**Important**: Always run PowerShell as Administrator for full functionality.
+
+### Windows Requirements
+
+- **OS**: Windows Server 2016+, Windows 10+ (64-bit)
+- **PowerShell**: Version 5.1 or higher (included with Windows)
+- **Memory**: 1GB RAM minimum, 2GB+ recommended
+- **Storage**: 2GB free space minimum, 5GB+ recommended
+- **Network**: Outbound TCP port 1514 to manager
+- **Privileges**: Administrator rights required
+
+### Windows Directory Structure
+
+```
+C:\monitoring-agent\
+├── monitoring-agent-control.ps1    # Main control script
+├── windows\                         # Windows-specific files
+│   ├── bin\                        # Windows binaries
+│   │   ├── WAZUH_AGENT.EXE        # Main agent process
+│   │   ├── AGENT_AUTH.EXE         # Authentication tool
+│   │   └── MANAGE_AGENTS.EXE      # Agent management
+│   ├── lib\                       # Libraries and DLLs
+│   │   ├── bypass.dll             # Windows bypass library
+│   │   └── *.dll                  # Other required libraries
+│   ├── etc\                       # Configuration files
+│   │   ├── ossec.conf             # Main configuration
+│   │   └── client.keys            # Authentication keys
+│   └── logs\                      # Log files
+├── scripts\windows\                # Windows support scripts
+│   ├── monitoring-watchdog.ps1    # Watchdog process
+│   ├── monitoring-boot-recovery.ps1 # Boot recovery
+│   └── monitoring-logging.ps1     # Logging system
+└── docs\                          # Documentation
+```
+
+### Windows Agent Features
+
+#### ✅ **Windows Service Integration**
+- Automatic installation as Windows Service
+- Auto-startup on system boot
+- Service recovery on failure
+- Task Scheduler backup for reliability
+
+#### ✅ **Windows-Specific Bypass**
+- Native DLL injection bypass for Windows
+- Handles Windows user/group restrictions
+- Administrator privilege management
+- Windows registry and file system integration
+
+#### ✅ **PowerShell Native**
+- Full PowerShell implementation
+- Windows PowerShell 5.1+ compatible
+- PowerShell Core 6+ compatible
+- Cross-platform PowerShell support
+
+#### ✅ **Windows Event Integration**
+- Windows Event Log monitoring
+- Power event handling (shutdown/startup)
+- WMI (Windows Management Instrumentation) integration
+- Windows Performance Counters
+
+### Windows Enrollment Process
+
+The Windows agent uses **identical enrollment process** as Linux:
 
 ```powershell
-# PowerShell enrollment (same process as Linux)
+# Interactive enrollment
 .\monitoring-agent-control.ps1 enroll <MANAGER_IP>
 
-# Example
+# Example with Docker manager
 .\monitoring-agent-control.ps1 enroll 172.17.0.2
 ```
 
-### Windows Configuration
+**Interactive Process (Same as Linux):**
+```
+====================================================
+Client Key Required
+====================================================
+Please provide the client key obtained from the Monitoring manager.
+You can get this key by running on the manager:
+  sudo /var/ossec/bin/manage_agents -l
 
-The Windows agent uses the same configuration approach:
+The key should be in format:
+  001 agent-name 192.168.1.100 abc123...def456
 
-**File Locations:**
-- Configuration: `etc\ossec.conf`
-- Client Keys: `etc\client.keys`
-- Logs: `logs\`
-
-**Key Settings (same as Linux):**
-```xml
-<enrollment>
-  <enabled>no</enabled>
-</enrollment>
+Enter the complete client key line: _
 ```
 
-**Important Notes for Windows:**
-- ✅ **Same Manual Naming**: Uses manager-configured names, not Windows hostname
-- ✅ **PowerShell Scripts**: `.ps1` equivalent scripts for Windows
-- ✅ **Same Enrollment Process**: Identical interactive enrollment
-- ✅ **Auto-Enrollment Disabled**: Prevents hostname-based registration
+**Key Benefits (Same as Linux):**
+- 🚫 **No Auto-Enrollment**: Prevents automatic registration with Windows hostname
+- 🏷️ **Manual Agent Names**: Uses descriptive names configured on manager
+- 🔐 **Key-Based Only**: Only accepts pre-configured authentication keys
+- ⚙️ **Auto-Configuration**: Updates `ossec.conf` and `client.keys` automatically
 
-### Windows Troubleshooting
+### Windows Agent Management
+
+#### Essential Commands
 
 ```powershell
-# Check agent status
+# Check status
 .\monitoring-agent-control.ps1 status
+
+# Start agent (with auto-setup)
+.\monitoring-agent-control.ps1 start
+
+# Stop agent
+.\monitoring-agent-control.ps1 stop
+
+# Restart agent
+.\monitoring-agent-control.ps1 restart
+
+# View logs
+.\monitoring-agent-control.ps1 logs 50        # Last 50 lines
+.\monitoring-agent-control.ps1 logs 100 $true # Follow mode
+
+# Health check
+.\monitoring-agent-control.ps1 health
 
 # Test connectivity
 .\monitoring-agent-control.ps1 test-connection
 
-# View logs
-.\monitoring-agent-control.ps1 logs 50
-
-# Windows firewall configuration
-netsh advfirewall firewall add rule name="Wazuh Agent" dir=out action=allow protocol=TCP remoteport=1514
+# Show help
+.\monitoring-agent-control.ps1 -Help
 ```
+
+#### Windows Service Integration
+
+The Windows agent automatically configures as a Windows Service:
+
+```powershell
+# Check service status
+Get-Service -Name "MonitoringAgent"
+
+# Service operations (alternative to PowerShell script)
+Start-Service -Name "MonitoringAgent"
+Stop-Service -Name "MonitoringAgent"
+Restart-Service -Name "MonitoringAgent"
+
+# Check service startup type
+Get-WmiObject -Class Win32_Service -Filter "Name='MonitoringAgent'" | Select-Object StartMode
+
+# View service logs
+Get-EventLog -LogName Application -Source "MonitoringAgent" -Newest 50
+```
+
+### Windows Configuration
+
+#### Configuration Files (Same Locations as Linux)
+
+- **Main Config**: `windows\etc\ossec.conf`
+- **Client Keys**: `windows\etc\client.keys`  
+- **Logs**: `windows\logs\`
+
+#### Key Windows-Specific Settings
+
+```xml
+<!-- Windows-specific ossec.conf settings -->
+<ossec_config>
+  <client>
+    <server>
+      <address>MANAGER_IP</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+    </server>
+    <enrollment>
+      <enabled>no</enabled>
+    </enrollment>
+  </client>
+  
+  <!-- Windows Event Log monitoring -->
+  <localfile>
+    <location>System</location>
+    <log_format>eventlog</log_format>
+  </localfile>
+  
+  <localfile>
+    <location>Security</location>
+    <log_format>eventlog</log_format>
+  </localfile>
+  
+  <!-- Windows registry monitoring -->
+  <windows_registry>
+    <registry>HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run</registry>
+  </windows_registry>
+</ossec_config>
+```
+
+### Windows Troubleshooting
+
+#### 1. **PowerShell Execution Policy Issues**
+
+**Problem**: Script cannot run due to execution policy
+```powershell
+# Error: "cannot be loaded because running scripts is disabled on this system"
+```
+
+**Solution**: Use bypass execution policy (recommended for monitoring agent)
+```powershell
+# Temporary bypass (session only)
+powershell -ExecutionPolicy Bypass -File ".\monitoring-agent-control.ps1" -Help
+
+# Set for current user (persistent)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Check current policy
+Get-ExecutionPolicy -List
+```
+
+**Note**: Using `-ExecutionPolicy Bypass` is **safe and recommended** for the monitoring agent script as it's a signed, trusted script.
+
+#### 2. **Administrator Privileges**
+
+**Problem**: Access denied errors
+```powershell
+# Error: "Access to the path is denied"
+```
+
+**Solution**: Run PowerShell as Administrator
+```powershell
+# Right-click PowerShell → "Run as Administrator"
+# Or use elevated shortcut
+Start-Process powershell -Verb RunAs
+```
+
+#### 3. **Windows Service Issues**
+
+**Problem**: Service won't start or install
+```powershell
+# Check service status
+Get-Service -Name "MonitoringAgent" -ErrorAction SilentlyContinue
+
+# If service missing, agent will auto-create it
+.\monitoring-agent-control.ps1 start
+
+# Manual service removal (if needed)
+sc.exe delete "MonitoringAgent"
+```
+
+#### 4. **Windows Firewall Issues**
+
+**Problem**: Cannot connect to manager
+```powershell
+# Test connectivity
+Test-NetConnection -ComputerName <MANAGER_IP> -Port 1514
+
+# Configure Windows Firewall automatically
+.\monitoring-agent-control.ps1 configure-firewall <MANAGER_IP>
+
+# Manual firewall rule
+New-NetFirewallRule -DisplayName "Monitoring Agent" -Direction Outbound -Protocol TCP -RemotePort 1514 -Action Allow
+```
+
+#### 5. **Windows Binary Issues**
+
+**Problem**: WAZUH_AGENT.EXE won't start
+```powershell
+# Check if binaries exist
+Test-Path ".\windows\bin\WAZUH_AGENT.EXE"
+
+# Check binary version/info
+Get-ItemProperty ".\windows\bin\WAZUH_AGENT.EXE" | Select-Object VersionInfo
+
+# Run binary test
+.\monitoring-agent-control.ps1 health
+```
+
+#### 6. **Windows Event Log Issues**
+
+**Problem**: Cannot write to Windows Event Log
+```powershell
+# Check if event source exists
+[System.Diagnostics.EventLog]::SourceExists("MonitoringAgent")
+
+# Manually create event source (as Administrator)
+New-EventLog -LogName Application -Source "MonitoringAgent"
+```
+
+### Windows Advanced Configuration
+
+#### Custom Service Configuration
+
+```powershell
+# View service configuration
+sc.exe qc "MonitoringAgent"
+
+# Change service startup type
+sc.exe config "MonitoringAgent" start= auto
+
+# Configure service recovery
+sc.exe failure "MonitoringAgent" reset= 86400 actions= restart/5000/restart/10000/restart/30000
+```
+
+#### Task Scheduler Integration
+
+```powershell
+# View monitoring agent scheduled tasks
+Get-ScheduledTask -TaskPath "\\" | Where-Object {$_.TaskName -like "*MonitoringAgent*"}
+
+# Enable/disable task scheduler fallback
+Disable-ScheduledTask -TaskName "MonitoringAgentStartup"
+Enable-ScheduledTask -TaskName "MonitoringAgentStartup"
+```
+
+#### Registry Monitoring
+
+```powershell
+# Check registry monitoring configuration
+Get-Content ".\windows\etc\ossec.conf" | Select-String "windows_registry" -A 5
+
+# Test registry access
+Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+```
+
+### Windows vs Linux Comparison
+
+| Feature | Windows | Linux | Notes |
+|---------|---------|-------|-------|
+| **Installation** | Extract ZIP | Extract TAR.GZ | Same simplicity |
+| **Enrollment** | Identical | Identical | Same interactive process |
+| **Auto-Startup** | Windows Service | systemd service | Both automatic |
+| **Bypass** | bypass.dll | bypass.so | Platform-specific |
+| **Process Management** | Single WAZUH_AGENT.EXE | Multiple daemons | Windows unified |
+| **Logs** | Event Log + Files | Files only | Windows enhanced |
+| **Configuration** | ossec.conf | ossec.conf | Same format |
+| **Firewall** | Windows Firewall | iptables/ufw | Auto-configured |
+| **Recovery** | Task Scheduler | cron/systemd | Both automatic |
+
+### Windows Security Considerations
+
+#### 1. **Administrator Rights**
+- Required for service installation and management
+- Bypass DLL requires elevated privileges
+- Configuration file access needs admin rights
+
+#### 2. **Windows Defender/Antivirus**
+- Add monitoring agent directory to exclusions
+- Whitelist WAZUH_AGENT.EXE and bypass.dll
+- Exclude log directories from real-time scanning
+
+```powershell
+# Add Windows Defender exclusions
+Add-MpPreference -ExclusionPath "C:\monitoring-agent"
+Add-MpPreference -ExclusionProcess "WAZUH_AGENT.EXE"
+```
+
+#### 3. **User Account Control (UAC)**
+- Script automatically requests elevation
+- No manual UAC bypass needed
+- Transparent privilege escalation
+
+### Windows Performance Optimization
+
+#### Memory Usage
+```powershell
+# Monitor agent memory usage
+Get-Process -Name "WAZUH_AGENT" | Select-Object Name,WorkingSet,CPU
+
+# Adjust Windows performance settings if needed
+# Control Panel → System → Advanced → Performance Settings
+```
+
+#### Disk I/O
+```powershell
+# Monitor log file growth
+Get-ChildItem ".\windows\logs\" | Select-Object Name,Length,LastWriteTime
+
+# Configure log rotation (automatic)
+.\monitoring-agent-control.ps1 logs 100  # View recent logs
+```
+
+### Windows Quick Reference
+
+| Task | Command |
+|------|---------|
+| **Install** | Extract ZIP, run as Admin |
+| **Enroll** | `.\monitoring-agent-control.ps1 enroll <IP>` |
+| **Start** | `.\monitoring-agent-control.ps1 start` |
+| **Stop** | `.\monitoring-agent-control.ps1 stop` |
+| **Status** | `.\monitoring-agent-control.ps1 status` |
+| **Logs** | `.\monitoring-agent-control.ps1 logs 50` |
+| **Health** | `.\monitoring-agent-control.ps1 health` |
+| **Service** | `Get-Service MonitoringAgent` |
+| **Firewall** | `.\monitoring-agent-control.ps1 configure-firewall <IP>` |
+| **Help** | `.\monitoring-agent-control.ps1 -Help` |
 
 ---
 
