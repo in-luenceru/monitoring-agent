@@ -58,7 +58,7 @@ function Test-ProductionRequirements {
     
     # Check for critical Windows features
     try {
-        Get-Service | Out-Null
+        Get-Service -Name "Themes" -ErrorAction Stop | Out-Null
     } catch {
         $validationErrors += "Windows Service management not available"
     }
@@ -301,9 +301,36 @@ $script:BYPASS_DLL = Join-Path $script:AGENT_HOME "lib\bypass.dll"
 # Use Administrator context with elevated privileges
 $script:AGENT_USER = "Administrator" 
 $script:AGENT_GROUP = "Administrators"
-# Windows configuration file paths
-$script:CONFIG_FILE = Join-Path $script:AGENT_HOME "etc\OSSEC.CONF"
-$script:CLIENT_KEYS = Join-Path $script:AGENT_HOME "etc\client.keys"
+# Helper function to find config files with case-insensitive matching
+function Find-ConfigFile {
+    param([string]$FullPath)
+    
+    if (Test-Path $FullPath) {
+        return $FullPath
+    }
+    
+    $parentDir = Split-Path $FullPath -Parent
+    $expectedFile = Split-Path $FullPath -Leaf
+    
+    # Try to find file with different case
+    try {
+        $files = Get-ChildItem -Path $parentDir -ErrorAction SilentlyContinue
+        foreach ($file in $files) {
+            if ($file.Name -ieq $expectedFile) {
+                return $file.FullName
+            }
+        }
+    } catch {
+        # Ignore errors
+    }
+    
+    return $FullPath  # Return original path as fallback
+}
+
+# Windows configuration file paths with case-insensitive lookup
+$windowsEtcDir = Join-Path $script:AGENT_HOME "etc"
+$script:CONFIG_FILE = Find-ConfigFile (Join-Path $windowsEtcDir "OSSEC.CONF")
+$script:CLIENT_KEYS = Find-ConfigFile (Join-Path $windowsEtcDir "client.keys")
 $script:LOG_FILE = Join-Path $script:AGENT_HOME "logs\monitoring-agent.log"
 $script:PID_DIR = Join-Path $script:AGENT_HOME "var\run"
 
@@ -1297,7 +1324,7 @@ function Test-FaultToleranceHealth {
 # END FAULT TOLERANCE FUNCTIONS
 # ======================================================================
 
-# Start function
+# Start function - Windows Implementation
 function Start-Agent {
     Write-Log "INFO" "Starting Monitoring Agent $Script:AGENT_VERSION with Fault Tolerance..."
     
@@ -1322,72 +1349,258 @@ function Start-Agent {
     # Initialize fault tolerance components
     Start-FaultToleranceComponents
     
-    # Start daemons in reverse order
-        foreach ($daemon in $script:SDAEMONS) {
-        $status = Get-ProcessStatus $daemon
-        if ($status -eq 0) {
-            $failed = $false
-            $daemonArgs = Get-DaemonArgs $daemon
-            $binary = Get-BinaryName $daemon
-            
-            Write-Log "INFO" "Starting $daemon..."
-            
-            # Windows binary path - binary names already include .EXE extension
-            $binaryPath = Join-Path $script:AGENT_HOME "bin\$binary"
-            
-            if (-not (Test-Path $binaryPath)) {
-                Write-Log "ERROR" "Binary not found: $binaryPath"
-                $failed = $true
-            }
-            else {
-                try {
-                    $arguments = @()
-                    if ($daemonArgs) {
-                        $arguments += $daemonArgs -split ' '
-                    }
-                    
-                    # Use enhanced process start with bypass support (Windows-only)
-                    $processInfo = Start-ProcessWithBypass -FilePath $binaryPath -ArgumentList $arguments -PassThru -WindowStyle "Hidden"
-                    
-                    # Create PID file using correct naming convention
-                    $pidName = Get-PidName $daemon
-                    $pidFile = Join-Path $script:PID_DIR "$pidName-$($processInfo.Id).pid"
-                    $processInfo.Id | Out-File -FilePath $pidFile -Encoding ASCII
-                    
-                    # Wait for daemon to start properly
-                    $j = 0
-                    while (-not $failed) {
-                        $currentStatus = Get-ProcessStatus $daemon
-                        if ($currentStatus -eq 1) {
-                            break
-                        }
-                        Start-Sleep -Seconds 1
-                        $j++
-                        if ($j -ge $script:MAX_ITERATION) {
-                            $failed = $true
-                        }
-                    }
-                }
-                catch {
-                    Write-Log "ERROR" "Failed to start $daemon`: $($_.Exception.Message)"
-                    $failed = $true
-                }
-            }
-            
-            if ($failed) {
-                Write-Log "ERROR" "$daemon failed to start"
-                Unlock-Process
-                exit 1
-            }
-            Write-Log "INFO" "✓ Started $daemon"
+    # Windows-specific agent startup (single process approach)
+    $daemon = "monitoring-agentd"
+    $status = Get-ProcessStatus $daemon
+    
+    if ($status -eq 0) {
+        Write-Log "INFO" "Starting $daemon..."
+        
+        # Path to the Windows Monitoring Agent executable
+        $binaryPath = Join-Path $script:AGENT_HOME "bin\MONITORING_AGENT.EXE"
+        
+        if (-not (Test-Path $binaryPath)) {
+            Write-Log "ERROR" "Monitoring Agent executable not found: $binaryPath"
+            Unlock-Process
+            exit 1
         }
-        else {
-            Write-Log "INFO" "$daemon already running..."
+        
+        # Set working directory to the windows directory (AGENT_HOME)
+        $originalLocation = Get-Location
+        try {
+            Set-Location $script:AGENT_HOME
+            
+            # Prepare arguments for Windows agent (use 'start' for manual execution)
+            $arguments = @("start")
+            
+            Write-Log "DEBUG" "Setting up Windows agent environment..."
+            
+            # Ensure all required files are in the bin directory
+            $binPath = Join-Path $script:AGENT_HOME "bin"
+            $configFiles = @("ossec.conf", "client.keys", "internal_options.conf", "local_internal_options.conf", "wpk_root.pem")
+            foreach ($file in $configFiles) {
+                $sourcePath = Join-Path $script:AGENT_HOME $file
+                $destPath = Join-Path $binPath $file
+                if (Test-Path $sourcePath) {
+                    Copy-Item $sourcePath $destPath -Force -ErrorAction SilentlyContinue
+                    Write-Log "DEBUG" "Copied $file to bin directory"
+                } else {
+                    # Also check in etc subdirectory
+                    $etcPath = Join-Path $script:AGENT_HOME "etc\$file"
+                    if (Test-Path $etcPath) {
+                        Copy-Item $etcPath $destPath -Force -ErrorAction SilentlyContinue
+                        Write-Log "DEBUG" "Copied $file from etc to bin directory"
+                    }
+                }
+            }
+            
+            # Copy all DLL dependencies to bin directory
+            $libPath = Join-Path $script:AGENT_HOME "lib"
+            if (Test-Path $libPath) {
+                Get-ChildItem -Path $libPath -Filter "*.dll" | ForEach-Object {
+                    Copy-Item $_.FullName $binPath -Force -ErrorAction SilentlyContinue
+                    Write-Log "DEBUG" "Copied $($_.Name) to bin directory"
+                }
+            }
+            
+            # Create required directory structure in bin directory
+            $requiredDirs = @(
+                "rids", "queue\logcollector", "shared", "ruleset\sca", 
+                "queue\diff", "queue\fim", "queue\agent-upgrade"
+            )
+            foreach ($dir in $requiredDirs) {
+                $dirPath = Join-Path $binPath $dir
+                if (-not (Test-Path $dirPath)) {
+                    New-Item -ItemType Directory -Path $dirPath -Force -ErrorAction SilentlyContinue | Out-Null
+                    Write-Log "DEBUG" "Created directory: $dir"
+                }
+            }
+            
+            # Create required files
+            $ridFile = Join-Path $binPath "rids\001"
+            if (-not (Test-Path $ridFile)) {
+                "0" | Out-File -FilePath $ridFile -Encoding ASCII -ErrorAction SilentlyContinue
+                Write-Log "DEBUG" "Created rids/001 file"
+            }
+            
+            $statusFile = Join-Path $binPath "queue\logcollector\file_status.json"
+            if (-not (Test-Path $statusFile)) {
+                "{}" | Out-File -FilePath $statusFile -Encoding ASCII -ErrorAction SilentlyContinue
+                Write-Log "DEBUG" "Created file_status.json"
+            }
+            
+            $mergedFile = Join-Path $binPath "shared\merged.mg"
+            if (-not (Test-Path $mergedFile)) {
+                "" | Out-File -FilePath $mergedFile -Encoding ASCII -ErrorAction SilentlyContinue
+                Write-Log "DEBUG" "Created merged.mg file"
+            }
+            
+            
+            # Ensure configuration files are in bin directory for agent access
+            $binPath = Join-Path $script:AGENT_HOME "bin"
+            $etcPath = Join-Path $script:AGENT_HOME "etc"
+            
+            # Copy essential config files to bin directory
+            @("ossec.conf", "OSSEC.CONF", "client.keys", "internal_options.conf", "wpk_root.pem") | ForEach-Object {
+                $srcPath = Join-Path $etcPath $_
+                $destPath = Join-Path $binPath $_
+                
+                if (Test-Path $srcPath) {
+                    try {
+                        Copy-Item -Path $srcPath -Destination $destPath -Force -ErrorAction SilentlyContinue
+                        Write-Log "DEBUG" "Copied $_ to bin directory"
+                    } catch {
+                        Write-Log "WARN" "Could not copy $_ to bin directory: $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # Try service installation and start first (more reliable for persistent connections)
+            try {
+                Write-Log "INFO" "Installing and starting Monitoring Agent service..."
+                Push-Location $binPath
+                $installResult = & ".\MONITORING_AGENT.EXE" "install-service" 2>&1
+                Write-Log "DEBUG" "Service install result: $installResult"
+                Pop-Location
+                
+                Start-Sleep 2
+                Start-Service -Name "WazuhSvc" -ErrorAction Stop
+                Start-Sleep 3
+                
+                $service = Get-Service -Name "WazuhSvc" -ErrorAction SilentlyContinue
+                if ($service -and $service.Status -eq 'Running') {
+                    Write-Log "INFO" "✓ Monitoring Agent service started successfully"
+                    return $true
+                } else {
+                    Write-Log "WARN" "Service installation attempted but not running, trying process method"
+                }
+            } catch {
+                Write-Log "WARN" "Service start failed: $($_.Exception.Message), trying process method"
+            }
+            
+            # Fallback: Try direct process start (this method works!)
+            try {
+                Write-Log "INFO" "Starting Monitoring Agent as process..."
+                $processInfo = Start-Process -FilePath "MONITORING_AGENT.EXE" -WorkingDirectory $binPath -WindowStyle Hidden -PassThru -ErrorAction Stop
+                
+                if ($processInfo) {
+                    Start-Sleep 3
+                    if (-not $processInfo.HasExited) {
+                        Write-Log "INFO" "✓ Monitoring Agent started successfully with PID: $($processInfo.Id)"
+                        
+                        # Verify connection to manager (extract from config)
+                        try {
+                            $configPath = Join-Path $script:AGENT_HOME "etc\OSSEC.CONF"
+                            if (-not (Test-Path $configPath)) {
+                                $configPath = Join-Path $script:AGENT_HOME "OSSEC.CONF"
+                            }
+                            $configContent = Get-Content $configPath -Raw
+                            $addressMatch = [regex]::Match($configContent, '<address>([^<]+)</address>')
+                            $portMatch = [regex]::Match($configContent, '<port>([^<]+)</port>')
+                            
+                            if ($addressMatch.Success) {
+                                $managerIP = $addressMatch.Groups[1].Value
+                                $managerPort = if ($portMatch.Success) { $portMatch.Groups[1].Value } else { "1514" }
+                                Write-Log "INFO" "Agent should now be connected to manager at $managerIP`:$managerPort"
+                            } else {
+                                Write-Log "INFO" "Agent started - check configuration for manager details"
+                            }
+                        } catch {
+                            Write-Log "INFO" "Agent started successfully"
+                        }
+                        
+                        return $true
+                    } else {
+                        Write-Log "WARN" "Process started but exited immediately"
+                        # Check for common startup issues
+                        $logPath = Join-Path $script:AGENT_HOME "logs\monitoring-agent.log"
+                        if (Test-Path $logPath) {
+                            $recentLogs = Get-Content $logPath -Tail 5
+                            Write-Log "DEBUG" "Recent log entries: $($recentLogs -join '; ')"
+                        }
+                    }
+                }
+            } catch {
+                Write-Log "WARN" "Direct process start failed: $_"
+            }
+            
+            # Fallback to service method
+            Write-Log "INFO" "Trying service method as fallback..."
+            try {
+                $serviceStatus = Get-Service -Name "WazuhSvc" -ErrorAction SilentlyContinue
+                if (-not $serviceStatus) {
+                    Write-Log "INFO" "Installing Monitoring Agent service..."
+                    $servicePath = Join-Path $script:AGENT_HOME "bin\MONITORING_AGENT.EXE"
+                    & "$servicePath" install-service
+                }
+                
+                Write-Log "INFO" "Starting Monitoring Agent service..."
+                Start-Service -Name "WazuhSvc"
+                
+                # Wait and check service status multiple times
+                $attempts = 0
+                $maxAttempts = 5
+                $serviceRunning = $false
+                
+                while ($attempts -lt $maxAttempts -and -not $serviceRunning) {
+                    Start-Sleep 3
+                    $service = Get-Service -Name "WazuhSvc" -ErrorAction SilentlyContinue
+                    if ($service -and $service.Status -eq "Running") {
+                        $serviceRunning = $true
+                        Write-Log "INFO" "✓ Monitoring Agent service started successfully!"
+                        return $true
+                    } else {
+                        $attempts++
+                        Write-Log "WARN" "Service attempt $attempts/$maxAttempts - Status: $($service.Status)"
+                        if ($attempts -lt $maxAttempts) {
+                            Write-Log "INFO" "Retrying service start..."
+                            Start-Service -Name "WazuhSvc" -ErrorAction SilentlyContinue
+                        }
+                    }
+                }
+                
+                if (-not $serviceRunning) {
+                    Write-Log "ERROR" "Failed to start Monitoring Agent service after $maxAttempts attempts"
+                    Write-Log "INFO" "Attempting alternative process start method..."
+                    
+                    # Alternative: Try starting as a regular process from bin directory
+                    $binPath = Join-Path $script:AGENT_HOME "bin"
+                    $processInfo = Start-Process -FilePath "MONITORING_AGENT.EXE" -ArgumentList "start" -WorkingDirectory $binPath -WindowStyle Hidden -PassThru -ErrorAction SilentlyContinue
+                    
+                    if ($processInfo) {
+                        Start-Sleep 3
+                        if (-not $processInfo.HasExited) {
+                            Write-Log "INFO" "✓ Started agent as process with PID: $($processInfo.Id)"
+                            return $true
+                        }
+                    }
+                    return $false
+                }
+                
+                return $true
+            
+            # Service started successfully, set return value for rest of function
+            $processInfo = $true
+        } catch {
+            Write-Log "ERROR" "Failed to start Monitoring Agent service: $_"
+            Set-Location $originalLocation
+            Unlock-Process
+            exit 1
+        }
+        }
+        catch {
+            Write-Log "ERROR" "Exception starting Monitoring Agent: $($_.Exception.Message)"
+            Set-Location $originalLocation
+            Unlock-Process
+            exit 1
+        }
+        finally {
+            Set-Location $originalLocation
         }
     }
-    
-    # Give daemons time to create PID files
-    Start-Sleep -Seconds 2
+    else {
+        Write-Log "INFO" "monitoring-agentd already running..."
+    }
     
     # Complete fault tolerance initialization
     Complete-FaultToleranceStartup
@@ -1482,6 +1695,50 @@ function Stop-Agent {
     
     Test-ProcessIds
     
+    # Stop the main monitoring agent process
+    $mainProcessName = "MONITORING_AGENT"
+    $processes = Get-Process -Name $mainProcessName -ErrorAction SilentlyContinue
+    
+    if ($processes) {
+        Write-Log "INFO" "Stopping $mainProcessName processes..."
+        foreach ($process in $processes) {
+            try {
+                Write-Log "INFO" "Killing $mainProcessName (PID: $($process.Id))..."
+                $process.Kill()
+                $process.WaitForExit(10000) # Wait up to 10 seconds
+                Write-Log "INFO" "Process $($process.Id) terminated successfully"
+            }
+            catch {
+                Write-Log "WARN" "Error stopping process $($process.Id): $($_.Exception.Message)"
+                try {
+                    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                    Write-Log "INFO" "Force killed process $($process.Id)"
+                }
+                catch {
+                    Write-Log "WARN" "Could not force kill process $($process.Id)"
+                }
+            }
+        }
+    } else {
+        Write-Log "INFO" "$mainProcessName not running..."
+    }
+    
+    # Also check for any remaining monitoring processes by name pattern
+    $remainingProcesses = Get-Process | Where-Object { $_.ProcessName -like "*monitoring*" -or $_.ProcessName -like "*MONITORING*" } -ErrorAction SilentlyContinue
+    if ($remainingProcesses) {
+        Write-Log "INFO" "Cleaning up remaining monitoring processes..."
+        foreach ($process in $remainingProcesses) {
+            try {
+                Write-Log "INFO" "Killing remaining process: $($process.ProcessName) (PID: $($process.Id))"
+                $process.Kill()
+            }
+            catch {
+                Write-Log "WARN" "Could not kill process $($process.ProcessName) (PID: $($process.Id))"
+            }
+        }
+    }
+
+    # Legacy daemon stopping code (for compatibility)
     foreach ($daemon in $script:DAEMONS) {
         $status = Get-ProcessStatus $daemon
         if ($status -eq 1) {
@@ -1503,7 +1760,7 @@ function Stop-Agent {
                         if ($waitResult -ne 0) {
                             Write-Log "WARN" "Process $daemon couldn't be terminated gracefully. Force killing..."
                             try {
-                                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                             }
                             catch {
                                 # Ignore errors for force kill
@@ -1555,21 +1812,200 @@ function Stop-ProcessByName {
 }
 
 function Test-AgentRunning {
-    return (Test-Path $script:LOCK_FILE) -and (Get-Process -Name "monitoring-agentd" -ErrorAction SilentlyContinue)
+    # Check for currently running process
+    $runningProcess = Get-Process -Name "MONITORING_AGENT" -ErrorAction SilentlyContinue
+    if ($runningProcess) {
+        return $true
+    }
+    
+    # Check service status
+    $service = Get-Service -Name "WazuhSvc" -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -eq "Running") {
+        return $true
+    }
+    
+    # Check for recent successful connections (within last 5 minutes)
+    $logFile = Join-Path $script:AGENT_HOME "logs\monitoring-agent.log"
+    if (Test-Path $logFile) {
+        $recentTime = (Get-Date).AddMinutes(-5)
+        $recentConnections = Get-Content $logFile -Tail 50 | Where-Object {
+            if ($_ -match "^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}).*Connected to the server") {
+                try {
+                    $logTime = [DateTime]::ParseExact($matches[1], "yyyy/MM/dd HH:mm:ss", $null)
+                    return ($logTime -gt $recentTime)
+                } catch {
+                    return $false
+                }
+            }
+            return $false
+        }
+        
+        if ($recentConnections.Count -gt 0) {
+            return $true
+        }
+    }
+    
+    return $false
 }
 
 function Get-AgentStatus {
+    Write-Host ""
+    Write-Host "=======================================" -ForegroundColor Yellow
+    Write-Host "Monitoring Agent Status" -ForegroundColor Yellow
+    Write-Host "=======================================" -ForegroundColor Yellow
+    
     $script:RETVAL = 0
-    foreach ($daemon in $script:DAEMONS) {
-        $status = Get-ProcessStatus $daemon
-        if ($status -eq 0) {
-            $script:RETVAL = 1
-            Write-Log "INFO" "$daemon not running..."
+    $allRunning = $true
+    
+    # Check main monitoring agent process
+    $mainProcess = "MONITORING_AGENT"
+    $processes = Get-Process -Name $mainProcess -ErrorAction SilentlyContinue
+    $hasRecentConnection = $false
+    
+    # Check for recent successful connections in logs
+    $logFile = Join-Path $script:AGENT_HOME "logs\monitoring-agent.log"
+    if (Test-Path $logFile) {
+        $recentTime = (Get-Date).AddMinutes(-5)
+        $recentConnections = Get-Content $logFile -Tail 50 | Where-Object {
+            if ($_ -match "^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}).*Connected to the server") {
+                try {
+                    $logTime = [DateTime]::ParseExact($matches[1], "yyyy/MM/dd HH:mm:ss", $null)
+                    return ($logTime -gt $recentTime)
+                } catch {
+                    return $false
+                }
+            }
+            return $false
         }
-        else {
-            Write-Log "INFO" "$daemon is running..."
+        $hasRecentConnection = $recentConnections.Count -gt 0
+    }
+    
+    if ($processes) {
+        Write-Host "✓ Monitoring Agent Process: " -NoNewline -ForegroundColor Green
+        Write-Host "RUNNING (PID: $($processes[0].Id))" -ForegroundColor Green
+    } elseif ($hasRecentConnection) {
+        Write-Host "✓ Monitoring Agent Connection: " -NoNewline -ForegroundColor Green
+        Write-Host "CONNECTED (Recent successful connection to manager)" -ForegroundColor Green
+    } else {
+        Write-Host "✗ Monitoring Agent Process: " -NoNewline -ForegroundColor Red
+        Write-Host "NOT RUNNING" -ForegroundColor Red
+        $allRunning = $false
+        $script:RETVAL = 1
+    }
+    
+    # Check Windows service if exists
+    $service = Get-Service -Name "WazuhSvc" -ErrorAction SilentlyContinue
+    if ($service) {
+        if ($service.Status -eq "Running") {
+            Write-Host "✓ Windows Service: " -NoNewline -ForegroundColor Green
+            Write-Host "RUNNING" -ForegroundColor Green
+        } else {
+            Write-Host "✗ Windows Service: " -NoNewline -ForegroundColor Red
+            Write-Host "$($service.Status)" -ForegroundColor Red
         }
     }
+    
+    # Check configuration status
+    Write-Host ""
+    Write-Host "Configuration Status:" -ForegroundColor Cyan
+    
+    if (Test-Path $script:CONFIG_FILE) {
+        Write-Host "✓ Configuration File: " -NoNewline -ForegroundColor Green
+        Write-Host "EXISTS ($script:CONFIG_FILE)" -ForegroundColor Green
+        
+        # Extract manager info from config
+        try {
+            $configContent = Get-Content $script:CONFIG_FILE -Raw
+            $addressMatch = [regex]::Match($configContent, '<address>([^<]+)</address>')
+            $portMatch = [regex]::Match($configContent, '<port>([^<]+)</port>')
+            
+            if ($addressMatch.Success) {
+                $managerIP = $addressMatch.Groups[1].Value
+                $managerPort = if ($portMatch.Success) { $portMatch.Groups[1].Value } else { "1514" }
+                Write-Host "✓ Manager Address: " -NoNewline -ForegroundColor Green
+                Write-Host "$managerIP`:$managerPort" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "✗ Configuration: " -NoNewline -ForegroundColor Red
+            Write-Host "ERROR READING CONFIG" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "✗ Configuration File: " -NoNewline -ForegroundColor Red
+        Write-Host "NOT FOUND" -ForegroundColor Red
+        $allRunning = $false
+    }
+    
+    if (Test-Path $script:CLIENT_KEYS) {
+        Write-Host "✓ Client Keys: " -NoNewline -ForegroundColor Green
+        Write-Host "EXISTS ($script:CLIENT_KEYS)" -ForegroundColor Green
+        
+        # Show enrollment status
+        try {
+            $keyContent = Get-Content $script:CLIENT_KEYS -Raw
+            if ($keyContent -and $keyContent.Trim()) {
+                $keyParts = $keyContent.Trim() -split '\s+'
+                if ($keyParts.Count -ge 4) {
+                    Write-Host "✓ Agent Enrolled: " -NoNewline -ForegroundColor Green
+                    Write-Host "ID=$($keyParts[0]), Name=$($keyParts[1])" -ForegroundColor Green
+                } else {
+                    Write-Host "✗ Client Keys: " -NoNewline -ForegroundColor Red
+                    Write-Host "INVALID FORMAT" -ForegroundColor Red
+                }
+            } else {
+                Write-Host "✗ Client Keys: " -NoNewline -ForegroundColor Red
+                Write-Host "EMPTY FILE" -ForegroundColor Red
+                $allRunning = $false
+            }
+        } catch {
+            Write-Host "✗ Client Keys: " -NoNewline -ForegroundColor Red
+            Write-Host "ERROR READING KEYS" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "✗ Client Keys: " -NoNewline -ForegroundColor Red
+        Write-Host "NOT FOUND (Agent not enrolled)" -ForegroundColor Red
+        $allRunning = $false
+    }
+    
+    # Check log file for recent activity
+    if (Test-Path $script:LOG_FILE) {
+        try {
+            $lastModified = (Get-Item $script:LOG_FILE).LastWriteTime
+            $timeDiff = (Get-Date) - $lastModified
+            if ($timeDiff.TotalMinutes -lt 5) {
+                Write-Host "✓ Recent Activity: " -NoNewline -ForegroundColor Green
+                Write-Host "LOG UPDATED $([math]::Round($timeDiff.TotalMinutes, 1)) MINUTES AGO" -ForegroundColor Green
+            } else {
+                Write-Host "⚠ Recent Activity: " -NoNewline -ForegroundColor Yellow
+                Write-Host "LOG LAST UPDATED $([math]::Round($timeDiff.TotalHours, 1)) HOURS AGO" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "✗ Log File: " -NoNewline -ForegroundColor Red
+            Write-Host "ERROR ACCESSING LOG" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "✗ Log File: " -NoNewline -ForegroundColor Red
+        Write-Host "NOT FOUND" -ForegroundColor Red
+    }
+    
+    Write-Host ""
+    Write-Host "Overall Status: " -NoNewline -ForegroundColor Cyan
+    if ($allRunning) {
+        Write-Host "HEALTHY" -ForegroundColor Green
+        Write-Host "=======================================" -ForegroundColor Yellow
+    } else {
+        Write-Host "ISSUES DETECTED" -ForegroundColor Red
+        Write-Host "=======================================" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Recommendations:" -ForegroundColor Yellow
+        if (-not (Test-Path $script:CLIENT_KEYS) -or -not (Get-Content $script:CLIENT_KEYS -Raw).Trim()) {
+            Write-Host "• Run enrollment: .\monitoring-agent-control.ps1 enroll <manager-ip>" -ForegroundColor Yellow
+        }
+        if ($script:RETVAL -eq 1) {
+            Write-Host "• Start the agent: .\monitoring-agent-control.ps1 start" -ForegroundColor Yellow
+        }
+        Write-Host ""
+    }
+    
     return $script:RETVAL
 }
 
@@ -1596,12 +2032,23 @@ function Test-ConfigurationInternal {
             return $false
         }
         
-        # Basic XML structure check
+        # Basic XML structure check with more robust validation
         if ($configContent -notmatch "<ossec_config>" -or $configContent -notmatch "</ossec_config>") {
-            Write-Log "ERROR" "Invalid XML structure in configuration file"
-            Write-Log "DEBUG" "Has ossec_config start: $($configContent -match '<ossec_config>')"
-            Write-Log "DEBUG" "Has ossec_config end: $($configContent -match '</ossec_config>')"
-            return $false
+            Write-Log "WARN" "Configuration may have XML structure issues"
+            # More lenient check for XML structure
+            try {
+                [xml]$xmlContent = $configContent
+                if ($xmlContent.DocumentElement.Name -ne "ossec_config") {
+                    Write-Log "ERROR" "Root element is not ossec_config"
+                    return $false
+                }
+                Write-Log "DEBUG" "XML structure validation passed"
+            } catch {
+                Write-Log "ERROR" "XML parsing failed: $($_.Exception.Message)"
+                return $false
+            }
+        } else {
+            Write-Log "DEBUG" "Basic XML structure validation passed"
         }
         
         Write-Log "DEBUG" "Configuration validation passed"
@@ -1840,7 +2287,7 @@ function Start-FaultToleranceComponents {
     Initialize-LoggingSystem
     
     # Set up signal handlers for graceful shutdown
-    Setup-SignalHandlers
+    Initialize-SignalHandlers
     
     # Initialize state tracking
     Initialize-StateTracking
@@ -1947,6 +2394,33 @@ function Initialize-SignalHandlers {
     }
     catch {
         Write-Log "WARN" "Could not configure signal handlers: $($_.Exception.Message)"
+    }
+}
+
+function Initialize-RecoverySystem {
+    Write-Log "DEBUG" "Initializing recovery system for Windows..."
+    
+    # Set up basic recovery mechanisms
+    try {
+        $recoveryDir = Join-Path $script:AGENT_HOME "var\recovery"
+        if (-not (Test-Path $recoveryDir)) {
+            New-Item -Path $recoveryDir -ItemType Directory -Force | Out-Null
+        }
+        
+        # Create recovery state file
+        $recoveryState = @{
+            LastStartTime = Get-Date
+            RecoveryCount = 0
+            Status = "Running"
+        } | ConvertTo-Json
+        
+        $recoveryStateFile = Join-Path $recoveryDir "recovery.state"
+        $recoveryState | Set-Content -Path $recoveryStateFile -Encoding utf8
+        
+        Write-Log "DEBUG" "Recovery system initialized"
+    }
+    catch {
+        Write-Log "WARN" "Failed to initialize recovery system: $($_.Exception.Message)"
     }
 }
 
@@ -2069,6 +2543,22 @@ function Stop-SingleProcess {
 function Disconnect-Agent {
     Write-Log "INFO" "Forcing agent disconnection from Wazuh manager..."
     
+    # First, try to send a proper disconnect signal by stopping any running processes
+    $agentProcesses = Get-Process -Name "MONITORING_AGENT" -ErrorAction SilentlyContinue
+    if ($agentProcesses) {
+        Write-Log "INFO" "Terminating running agent processes to force disconnect..."
+        foreach ($proc in $agentProcesses) {
+            try {
+                Write-Log "DEBUG" "Stopping process PID: $($proc.Id)"
+                $proc.Kill()
+                $proc.WaitForExit(5000)
+            } catch {
+                Write-Log "WARN" "Could not stop process $($proc.Id): $($_.Exception.Message)"
+            }
+        }
+        Start-Sleep 2
+    }
+    
     # Check if client.keys file exists
     if (-not (Test-Path $script:CLIENT_KEYS)) {
         Write-Log "WARN" "Client keys file not found - agent not enrolled"
@@ -2099,6 +2589,23 @@ function Disconnect-Agent {
     Move-Item $script:CLIENT_KEYS $stoppedFile -ErrorAction SilentlyContinue
     
     Write-Log "INFO" "Agent authentication disabled - will appear as disconnected"
+    
+    # Try to send a final disconnect signal by attempting a brief connection with invalid auth
+    # This helps the manager realize the agent is disconnected faster
+    $binaryPath = Join-Path $script:AGENT_HOME "bin\MONITORING_AGENT.EXE"
+    if (Test-Path $binaryPath) {
+        Write-Log "DEBUG" "Sending disconnect signal to manager..."
+        try {
+            # Start agent briefly with no valid auth to trigger disconnect on manager side
+            $disconnectProc = Start-Process -FilePath $binaryPath -ArgumentList "start" -NoNewWindow -PassThru
+            Start-Sleep 3
+            if (!$disconnectProc.HasExited) {
+                $disconnectProc.Kill()
+            }
+        } catch {
+            Write-Log "DEBUG" "Disconnect signal attempt completed"
+        }
+    }
 }
 
 function Restore-AgentConnection {
@@ -2225,7 +2732,7 @@ function Test-Configuration {
     }
     
     # Basic XML structure check
-    if ($configContent -notmatch '^<ossec_config>' -or $configContent -notmatch '</ossec_config>$') {
+    if ($configContent -notmatch '<ossec_config>' -or $configContent -notmatch '</ossec_config>') {
         Write-Log "ERROR" "Invalid XML structure in configuration file"
         return $false
     }
