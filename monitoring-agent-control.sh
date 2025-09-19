@@ -888,16 +888,111 @@ is_agent_running() {
 
 status_agent()
 {
+    echo ""
+    echo "======================================="
+    echo "Monitoring Agent Status"
+    echo "======================================="
+    
     RETVAL=0
+    local all_running=true
+    
+    # Check main monitoring agent processes
     for i in ${DAEMONS}; do
         pstatus ${i};
         if [ $? = 0 ]; then
             RETVAL=1
-            echo "${i} not running..."
+            all_running=false
+            echo "✗ ${i}: NOT RUNNING"
         else
-            echo "${i} is running..."
+            echo "✓ ${i}: RUNNING"
         fi
     done
+    
+    echo ""
+    echo "Configuration Status:"
+    
+    # Check configuration file
+    if [[ -f "$CONFIG_FILE" ]]; then
+        echo "✓ Configuration File: EXISTS ($CONFIG_FILE)"
+        
+        # Extract manager info from config
+        local manager_ip=$(grep -o '<address>[^<]*</address>' "$CONFIG_FILE" 2>/dev/null | sed 's/<[^>]*>//g')
+        local manager_port=$(grep -o '<port>[^<]*</port>' "$CONFIG_FILE" 2>/dev/null | sed 's/<[^>]*>//g')
+        manager_port="${manager_port:-1514}"
+        
+        if [[ -n "$manager_ip" ]]; then
+            echo "✓ Manager Address: $manager_ip:$manager_port"
+        fi
+    else
+        echo "✗ Configuration File: NOT FOUND"
+        all_running=false
+    fi
+    
+    # Check client keys (enrollment status)
+    if [[ -f "$CLIENT_KEYS" ]]; then
+        echo "✓ Client Keys: EXISTS ($CLIENT_KEYS)"
+        
+        # Show enrollment status
+        if [[ -s "$CLIENT_KEYS" ]]; then
+            local key_content=$(cat "$CLIENT_KEYS" 2>/dev/null)
+            if [[ -n "$key_content" ]]; then
+                local agent_id=$(echo "$key_content" | awk '{print $1}')
+                local agent_name=$(echo "$key_content" | awk '{print $2}')
+                if [[ -n "$agent_id" && -n "$agent_name" ]]; then
+                    echo "✓ Agent Enrolled: ID=$agent_id, Name=$agent_name"
+                else
+                    echo "✗ Client Keys: INVALID FORMAT"
+                    all_running=false
+                fi
+            else
+                echo "✗ Client Keys: EMPTY FILE"
+                all_running=false
+            fi
+        else
+            echo "✗ Client Keys: EMPTY FILE"
+            all_running=false
+        fi
+    else
+        echo "✗ Client Keys: NOT FOUND (Agent not enrolled)"
+        all_running=false
+    fi
+    
+    # Check log file for recent activity
+    if [[ -f "$LOG_FILE" ]]; then
+        local last_modified=$(stat -c %Y "$LOG_FILE" 2>/dev/null || date +%s)
+        local current_time=$(date +%s)
+        local time_diff=$((current_time - last_modified))
+        local minutes_diff=$((time_diff / 60))
+        
+        if [[ $minutes_diff -lt 5 ]]; then
+            echo "✓ Recent Activity: LOG UPDATED $minutes_diff MINUTES AGO"
+        else
+            local hours_diff=$((minutes_diff / 60))
+            echo "⚠ Recent Activity: LOG LAST UPDATED $hours_diff HOURS AGO"
+        fi
+    else
+        echo "✗ Log File: NOT FOUND"
+    fi
+    
+    echo ""
+    echo -n "Overall Status: "
+    if [[ "$all_running" == "true" ]]; then
+        echo "HEALTHY"
+        echo "======================================="
+    else
+        echo "ISSUES DETECTED"
+        echo "======================================="
+        echo ""
+        echo "Recommendations:"
+        if [[ ! -f "$CLIENT_KEYS" || ! -s "$CLIENT_KEYS" ]]; then
+            echo "• Run enrollment: $0 enroll <manager-ip>"
+        fi
+        if [[ $RETVAL -eq 1 ]]; then
+            echo "• Start the agent: $0 start"
+        fi
+        echo ""
+    fi
+    
     exit $RETVAL
 }
 validate_configuration() {
