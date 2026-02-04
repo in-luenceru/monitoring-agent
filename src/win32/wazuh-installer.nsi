@@ -224,6 +224,7 @@ Section "Monitoring Agent (required)" MainSec
     File /oname=active-response\bin\route-null.exe route-null.exe
     File /oname=active-response\bin\restart-monitoring.exe restart-wazuh.exe
     File /oname=active-response\bin\netsh.exe netsh.exe
+    File /oname=active-response\bin\clamav-scan.exe clamav-scan.exe
     File /oname=libwinpthread-1.dll libwinpthread-1.dll
     File /oname=libgcc_s_dw2-1.dll libgcc_s_dw2-1.dll
     File /oname=libstdc++-6.dll libstdc++-6.dll

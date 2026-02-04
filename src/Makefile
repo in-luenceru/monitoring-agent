@@ -879,7 +879,7 @@ $(SELINUX_MODULE): $(SELINUX_ENFORCEMENT)
 
 WINDOWS_LIBS:=win32/syscollector win32/syscheck
 WINDOWS_BINS:=win32/monitoring-agent.exe win32/monitoring-agent-eventchannel.exe win32/manage_agents.exe win32/setup-windows.exe win32/setup-syscheck.exe win32/setup-iis.exe win32/os_win32ui.exe win32/agent-auth.exe
-WINDOWS_ACTIVE_RESPONSES:=win32/restart-wazuh.exe win32/route-null.exe win32/netsh.exe
+WINDOWS_ACTIVE_RESPONSES:=win32/restart-wazuh.exe win32/route-null.exe win32/netsh.exe win32/clamav-scan.exe
 
 ifeq (${MAKECMDGOALS},winagent)
 $(error Do not use 'winagent' directly, use 'TARGET=winagent')
@@ -2680,7 +2680,13 @@ win32/route_null_resource.o: win32/route-null.rc
 	${OSSEC_WINDRES} -i $< -o $@
 
 win32/netsh_resource.o: win32/netsh.rc
+
+win32/clamav_scan_resource.o: win32/clamav-scan.rc
 	${OSSEC_WINDRES} -i $< -o $@
+	${OSSEC_WINDRES} -i $< -o $@
+win32/clamav_scan_resource.o: win32/clamav-scan.rc
+	${OSSEC_WINDRES} -i $< -o $@
+
 
 win32/wazuh_agent_eventchannel_resource.o: win32/wazuh-agent-eventchannel.rc
 	${OSSEC_WINDRES} -i $< -o $@
@@ -2736,8 +2742,8 @@ win32/ui_resource.o: win32/ui/win32ui.rc
 win32/auth_resource.o: win32/agent-auth.rc
 	${OSSEC_WINDRES} -i $< -o $@
 
-win32/os_win32ui.exe: win32/ui_resource.o win32/version-app.o win32/win_service_rk.o ${win32_ui_o}
-	${OSSEC_CCBIN} -DARGV0=\"wazuh-win32ui\" ${OSSEC_LDFLAGS} $^ ${OSSEC_LIBS} -I./syscheckd/include -mwindows -o $@
+win32/os_win32ui.exe: win32/ui_resource.o win32/version-app.o win32/win_service_rk.o win32/ui/os_win32ui.o win32/ui/common.o
+	${OSSEC_CCBIN} -DARGV0=\"wazuh-win32ui\" ${OSSEC_LDFLAGS} $^ ${OSSEC_LIBS} -I./syscheckd/include -mwindows -lole32 -o $@
 
 win32/agent-auth.exe: win32/auth_resource.o win32/version-app.o win32/win_service_rk.o os_auth/main-client.o os_auth/ssl.o os_auth/check_cert.o addagent/validate.o
 	${OSSEC_CCBIN} -DARGV0=\"agent-auth\" -DOSSECHIDS ${OSSEC_LDFLAGS} $^ ${OSSEC_LIBS} -lshlwapi -lwsock32 -lsecur32 -lws2_32 -flto -o $@
@@ -2750,6 +2756,9 @@ win32/route-null.exe: win32/route_null_resource.o win32/version-app.o active-res
 
 win32/netsh.exe: win32/netsh_resource.o win32/version-app.o active-response/active_responses.o active-response/netsh.o shared/cryptography.o shared/dll_load_notify.o shared/debug_op_proc.o shared/time_op.o shared/file_op_proc.o shared/utf8_winapi_wrapper.o shared/utf8_op.o ${WAZUH_LIB} ${WAZUHEXT_LIB}
 	${OSSEC_CCBIN} -DARGV0=\"netsh\" ${AR_LDFLAGS} $^ -lwintrust -lpsapi -lcrypt32 -lshlwapi -lmpr -o $@
+
+win32/clamav-scan.exe: win32/clamav_scan_resource.o win32/version-app.o active-response/active_responses.o active-response/clamav-scan.o shared/cryptography.o shared/dll_load_notify.o shared/debug_op_proc.o shared/time_op.o shared/file_op_proc.o shared/utf8_winapi_wrapper.o shared/utf8_op.o ${WAZUH_LIB} ${WAZUHEXT_LIB}
+	${OSSEC_CCBIN} -DARGV0=\"clamav-scan\" ${AR_LDFLAGS} $^ -lwintrust -lpsapi -lcrypt32 -lshlwapi -lmpr -o $@
 
 
 ####################

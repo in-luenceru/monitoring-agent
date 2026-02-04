@@ -1,0 +1,2 @@
+win32/clamav_scan_resource.o: win32/clamav-scan.rc
+	${OSSEC_WINDRES} -i $< -o $@
