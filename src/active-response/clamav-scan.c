@@ -40,14 +40,34 @@ int main (int argc, char **argv) {
     
     cJSON *extra_args = cJSON_GetObjectItem(input_json, "parameters");
     if (extra_args && cJSON_IsObject(extra_args)) {
-        cJSON *type_item = cJSON_GetObjectItem(extra_args, "scan_type");
-        if (type_item && cJSON_IsString(type_item)) {
-            scan_type = type_item->valuestring;
+        // Try to get parameters from alert data (log injection)
+        cJSON *alert_node = cJSON_GetObjectItem(extra_args, "alert");
+        if (alert_node && cJSON_IsObject(alert_node)) {
+            cJSON *data_node = cJSON_GetObjectItem(alert_node, "data");
+            if (data_node && cJSON_IsObject(data_node)) {
+                cJSON *type_item = cJSON_GetObjectItem(data_node, "scan_type");
+                if (type_item && cJSON_IsString(type_item)) {
+                    scan_type = type_item->valuestring;
+                }
+                
+                cJSON *path_item = cJSON_GetObjectItem(data_node, "scan_path");
+                if (path_item && cJSON_IsString(path_item)) {
+                    scan_path = path_item->valuestring;
+                }
+            }
         }
-        
-        cJSON *path_item = cJSON_GetObjectItem(extra_args, "scan_path");
-        if (path_item && cJSON_IsString(path_item)) {
-            scan_path = path_item->valuestring;
+
+        // Fallback: Check direct parameters (if passed via active-response args)
+        if (strcmp(scan_type, "quickscan") == 0) {
+            cJSON *type_item = cJSON_GetObjectItem(extra_args, "scan_type");
+            if (type_item && cJSON_IsString(type_item)) {
+                scan_type = type_item->valuestring;
+            }
+            
+            cJSON *path_item = cJSON_GetObjectItem(extra_args, "scan_path");
+            if (path_item && cJSON_IsString(path_item)) {
+                scan_path = path_item->valuestring;
+            }
         }
     }
 
@@ -70,7 +90,18 @@ int main (int argc, char **argv) {
     memset(install_dir, '\0', OS_MAXSTR);
     
     // Get the directory where this executable is located
-    char *last_slash = strrchr(argv[0], '\\');
+    char *last_back = strrchr(argv[0], '\\');
+    char *last_fwd = strrchr(argv[0], '/');
+    char *last_slash = NULL;
+
+    if (last_back && last_fwd) {
+        last_slash = (last_back > last_fwd) ? last_back : last_fwd;
+    } else if (last_back) {
+        last_slash = last_back;
+    } else {
+        last_slash = last_fwd;
+    }
+
     if (last_slash) {
         size_t dir_len = last_slash - argv[0];
         if (dir_len < OS_MAXSTR - 1) {
@@ -80,7 +111,8 @@ int main (int argc, char **argv) {
     }
     
     // Navigate up to installation root and locate ClamAV script
-    snprintf(ps_script, OS_MAXSTR -1, "%s\\..\\clamav\\ClamAVControl.ps1", install_dir);
+    // active-response/bin -> active-response -> root -> clamav
+    snprintf(ps_script, OS_MAXSTR -1, "%s\\..\\..\\clamav\\ClamAVControl.ps1", install_dir);
     
     // Build arguments based on scan type
     if (strcmp(scan_type, "customscan") == 0 && scan_path) {

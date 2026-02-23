@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ClamAV Manual Scan Trigger - Active Response Configuration
+  
+  Deploy to Wazuh Manager: /var/ossec/etc/ossec.conf
+  Add these blocks inside the <ossec_config> section.
+  
+  After adding, restart manager: systemctl restart wazuh-manager
+-->
+
+<!-- Command Definition -->
+<command>
+  <name>clamav-scan</name>
+  <executable>clamav-scan.exe</executable>
+  <timeout_allowed>no</timeout_allowed>
+</command>
+
+<!-- Active Response: Trigger on rule 100500 (log injection method) -->
+<active-response>
+  <disabled>no</disabled>
+  <command>clamav-scan</command>
+  <location>local</location>
+  <rules_id>100500</rules_id>
+  <timeout>0</timeout>
+</active-response>
+
+<!--
+  Alternative configurations (uncomment as needed):
+  
+  Trigger on quick scan rule specifically:
+  <active-response>
+    <disabled>no</disabled>
+    <command>clamav-scan</command>
+    <location>local</location>
+    <rules_id>100501</rules_id>
+  </active-response>
+  
+  Trigger on suspicious file activity (syscheck):
+  <active-response>
+    <disabled>no</disabled>
+    <command>clamav-scan</command>
+    <location>local</location>
+    <rules_group>syscheck</rules_group>
+    <level>7</level>
+  </active-response>
+-->

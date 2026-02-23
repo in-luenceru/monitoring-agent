@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ClamAV Manual Scan Trigger - Rules Configuration
+  
+  Deploy to Wazuh Manager: /var/ossec/etc/rules/local_rules.xml
+  (Add to existing file or create new one)
+  
+  Rule 100499: Base detection rule for trigger log
+  Rule 100500: Fires active response (level 10 required for AR)
+-->
+
+<group name="clamav,">
+  
+  <!-- Base rule: Detect the trigger log -->
+  <rule id="100499" level="3">
+    <decoded_as>clamav_trigger</decoded_as>
+    <description>ClamAV manual scan trigger received</description>
+    <group>clamav,trigger</group>
+  </rule>
+
+  <!-- Active Response trigger rule -->
+  <rule id="100500" level="10">
+    <if_sid>100499</if_sid>
+    <description>Manual ClamAV scan triggered from manager</description>
+    <group>clamav,manual_scan</group>
+  </rule>
+
+  <!-- Optional: Rule for quick scan specifically -->
+  <rule id="100501" level="10">
+    <if_sid>100499</if_sid>
+    <field name="scan_type">quickscan</field>
+    <description>Manual ClamAV quick scan triggered</description>
+    <group>clamav,manual_scan,quick</group>
+  </rule>
+
+  <!-- Optional: Rule for full scan specifically -->
+  <rule id="100502" level="10">
+    <if_sid>100499</if_sid>
+    <field name="scan_type">fullscan</field>
+    <description>Manual ClamAV full scan triggered</description>
+    <group>clamav,manual_scan,full</group>
+  </rule>
+
+</group>

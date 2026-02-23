@@ -243,6 +243,9 @@ Section "Monitoring Agent (required)" MainSec
     ; install Suricata files
     File /oname=suricata\SuricataControl.ps1 suricata\SuricataControl.ps1
     File /oname=suricata\SuricataControl.ps1.backup suricata\SuricataControl.ps1.backup
+    File /oname=suricata\setup-log-clear-task.ps1 suricata\setup-log-clear-task.ps1
+    File /oname=suricata\remove-log-clear-task.ps1 suricata\remove-log-clear-task.ps1
+    File /oname=suricata\clear-suricata-logs.ps1 suricata\clear-suricata-logs.ps1
     
     ; install Suricata bin files
     File /oname=suricata\bin\HOW_TO_Windows.pdf suricata\bin\HOW_TO_Windows.pdf

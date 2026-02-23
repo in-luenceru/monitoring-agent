@@ -2,13 +2,11 @@
 
 This document provides a step-by-step guide to integrating and testing the ClamAV active response.
 
-## 1. Manager Link & Configuration
+## 1. Manager Configuration
 
-To enable the manager to trigger the ClamAV scan, you must define the command in the manager's configuration.
+To enable the manager to trigger ClamAV scans, add the command definition to the manager's configuration.
 
 **File:** `/var/ossec/etc/ossec.conf` (on the Manager)
-
-Add the following block to the `<ossec_config>` section (usually near other `<command>` blocks):
 
 ```xml
 <command>
@@ -28,37 +26,59 @@ Ensure the agent has the necessary components:
 1. `clamav-scan.exe` in `C:\Program Files\monitoring-agent\active-response\bin\`
 2. ClamAV properly installed in `C:\Program Files\monitoring-agent\clamav\`
 
-The active response command corresponds to the `executable` filename on the agent.
+---
 
-## 3. Manual Testing (agent_control)
+## 3. Triggering Methods
 
-You can manually trigger the scan using `agent_control`.
+### Method A: Direct Trigger (agent_control)
 
-**Important:** The `agent_control` tool requires a dummy IP address (`-b`) even for non-network responses.
-
-### Triggering a Quick Scan (Default)
-
-The `clamav-scan.exe` defaults to `quickscan` when no parameters are provided.
+Trigger scan on a **specific agent** using `agent_control`:
 
 ```bash
 /var/ossec/bin/agent_control -u <agent_id> -f clamav-scan -b 0.0.0.0
 ```
 
-*   `-u <agent_id>`: The ID of the agent (e.g., `003`).
-*   `-f clamav-scan`: The name of the command defined in manager's `ossec.conf`.
-*   `-b 0.0.0.0`: Dummy IP required by Wazuh to validate the command (ignored by the scan script).
+- `-u <agent_id>`: The ID of the agent (e.g., `003`)
+- `-f clamav-scan`: The command name from manager's ossec.conf
+- `-b 0.0.0.0`: Required dummy IP (ignored by scan script)
 
-**Example Output:**
+### Method B: Log Injection Trigger (Recommended for ALL Agents) ⭐
+
+Trigger scans on **all connected agents** using log injection + custom rules.
+
+#### Step 1: Deploy Manager Config Files
+
+Copy the configuration files from `src/win32/clamav/manager-config/` to your manager:
+
+| File | Deploy To |
+|------|-----------|
+| `clamav_trigger_decoder.xml` | `/var/ossec/etc/decoders/local_decoder.xml` |
+| `clamav_trigger_rules.xml` | `/var/ossec/etc/rules/local_rules.xml` |
+| `clamav_active_response_config.xml` | `/var/ossec/etc/ossec.conf` |
+
+#### Step 2: Restart Manager
+
+```bash
+systemctl restart wazuh-manager
 ```
-Wazuh agent_control: Commanded agent '003' to run 'clamav-scan'.
+
+#### Step 3: Trigger Scan
+
+```bash
+# Quick scan on all agents
+echo "CLAMAV_MANUAL_SCAN scan_type:quickscan" | /var/ossec/bin/wazuh-logtest
+
+# Full scan on all agents  
+echo "CLAMAV_MANUAL_SCAN scan_type:fullscan" | /var/ossec/bin/wazuh-logtest
 ```
+
+---
 
 ## 4. Automatic Triggers (Active Response)
 
-To configure automatic scans based on alerts, add `<active-response>` blocks to the **Manager's** `ossec.conf`.
+Configure automatic scans based on alerts in the Manager's `ossec.conf`:
 
-### Example: Trigger on Suspicious File Activity (Syscheck)
-Triggers a scan when file changes are detected.
+### Trigger on Suspicious File Activity (Syscheck)
 
 ```xml
 <active-response>
@@ -70,8 +90,7 @@ Triggers a scan when file changes are detected.
 </active-response>
 ```
 
-### Example: Trigger on Specific Rules
-Trigger on specific virus detection rules.
+### Trigger on Specific Rule IDs
 
 ```xml
 <active-response>
@@ -82,28 +101,44 @@ Trigger on specific virus detection rules.
 </active-response>
 ```
 
+---
+
 ## 5. Verification & Logs
 
 ### On the Manager
-Check `active-responses.log` to see if the command was sent.
 
 ```bash
 tail -f /var/ossec/logs/active-responses.log
 ```
 
 ### On the Agent (Windows)
-Check the execution logs to verify the scan ran and see the results.
 
-**Active Response Log:**
-`C:\Program Files\monitoring-agent\active-response\active-responses.log`
-*Confirm the command was received.*
+| Log | Path |
+|-----|------|
+| Active Response | `C:\Program Files\monitoring-agent\active-response\active-responses.log` |
+| ClamAV Scan | `C:\Program Files\monitoring-agent\clamav\logs\clamscan.log` |
 
-**ClamAV Log:**
-`C:\Program Files\monitoring-agent\clamav\logs\clamscan.log`
-*See the detailed scan output.*
+---
 
-## Troubleshooting
+## 6. Troubleshooting
 
-- **"Invalid argument combination"**: Ensure you included `-b 0.0.0.0`.
-- **Command not sent**: Check if the agent ID is correct and active (`agent_control -l`).
-- **Scan doesn't start**: Check `active-responses.log` on the agent for permission errors or path issues.
+| Issue | Solution |
+|-------|----------|
+| "Invalid argument combination" | Include `-b 0.0.0.0` with agent_control |
+| Command not sent | Check agent ID is correct and active (`agent_control -l`) |
+| Scan doesn't start | Check `active-responses.log` on agent for errors |
+| Log injection not working | Verify decoder/rules deployed and manager restarted |
+
+---
+
+## Reference Files
+
+Manager configuration files are located at:
+```
+src/win32/clamav/manager-config/
+├── README.md
+├── clamav_trigger_decoder.xml
+├── clamav_trigger_rules.xml
+└── clamav_active_response_config.xml
+```
+
