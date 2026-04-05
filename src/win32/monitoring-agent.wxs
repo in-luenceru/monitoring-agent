@@ -4,377 +4,476 @@
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
         <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
         <MediaTemplate EmbedCab="yes" />
+        <!-- Allows the user to easily find and uninstall the product from settings -->
+        <Property Id="ARPHELPLINK" Value="https://monitoring-solutions.com" />
+        <Property Id="ARPURLINFOABOUT" Value="https://monitoring-solutions.com" />
         <Feature Id="ProductFeature" Title="MonitoringAgent" Level="1">
             <ComponentGroupRef Id="ProductComponents" />
         </Feature>
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFilesFolder">
                 <Directory Id="INSTALLFOLDER" Name="monitoring-agent">
-                    <Directory Id="DIR_$SMPROGRAMS" Name="$SMPROGRAMS">
-                        <Directory Id="DIR_$SMPROGRAMS_Monitoring Agent" Name="Monitoring Agent">
+                    <Component Id="cmp1" Guid="2DF1241C-3C7C-484A-B59F-CB4CFD6A76FB">
+                        <File Id="file_1_monitoring_agent.exe" Name="monitoring-agent.exe" Source="monitoring-agent.exe" KeyPath="yes" />
+                        <ServiceInstall Id="ServiceInstall1" Name="MonitoringSvc" DisplayName="Monitoring Agent" Type="ownProcess" Start="auto" ErrorControl="normal" />
+                        <ServiceControl Id="ServiceControl1" Name="MonitoringSvc" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+                    </Component>
+                    <Component Id="cmp2" Guid="F57EF401-2FB3-42B3-986B-6714028857C2">
+                        <File Id="file_2_monitoring_agent_eventchannel.exe" Name="monitoring-agent-eventchannel.exe" Source="monitoring-agent-eventchannel.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp3" Guid="CFAEC73F-FA2B-4386-AD82-8D2B949A98F7">
+                        <File Id="file_3_ossec.conf" Name="ossec.conf" Source="ossec.conf" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp4" Guid="970735BF-A9F6-4984-9D08-61B9A8046F4C">
+                        <File Id="file_4_manage_agents.exe" Name="manage_agents.exe" Source="manage_agents.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp5" Guid="17036687-8795-4E04-9AF7-00F77741248A">
+                        <File Id="file_5_win32ui.exe" Name="win32ui.exe" Source="os_win32ui.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp6" Guid="99305AAA-F86F-48FE-8CB4-F2E98AA70552">
+                        <File Id="file_6_internal_options.conf" Name="internal_options.conf" Source="internal_options.conf" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp7" Guid="E34D8F0C-1BE8-458C-88E4-01BA350E4C08">
+                        <File Id="file_7_default_local_internal_options.conf" Name="default-local_internal_options.conf" Source="default-local_internal_options.conf" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp8" Guid="A3ED457F-3690-4F81-9AA7-40F16AABD8F8">
+                        <File Id="file_8_setup_windows.exe" Name="setup-windows.exe" Source="setup-windows.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp9" Guid="393767A3-A19B-4008-8658-6102A23D51E0">
+                        <File Id="file_9_setup_syscheck.exe" Name="setup-syscheck.exe" Source="setup-syscheck.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp10" Guid="AFA02F45-3B1F-494F-9FB4-1E3CF140E6BD">
+                        <File Id="file_10_setup_iis.exe" Name="setup-iis.exe" Source="setup-iis.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp11" Guid="7ACBD937-CC49-429D-8B60-064C262FE709">
+                        <File Id="file_11_doc.html" Name="doc.html" Source="doc.html" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp12" Guid="53F64A07-2993-48B4-B7BF-800CB61A9F01">
+                        <File Id="file_12_favicon.ico" Name="favicon.ico" Source="favicon.ico" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp13" Guid="9260FC81-AC63-4A68-B579-2E62FC41DB8A">
+                        <File Id="file_13_LICENSE.txt" Name="LICENSE.txt" Source="LICENSE.txt" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp14" Guid="0AFE6380-F2DC-4529-8553-E1B2B457F392">
+                        <File Id="file_14_help.txt" Name="help.txt" Source="help_win.txt" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp15" Guid="715E0F8E-027F-47DC-83B9-E9C2469DBF8A">
+                        <File Id="file_15_vista_sec.txt" Name="vista_sec.txt" Source="vista_sec.txt" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp16" Guid="5E6F9EE8-0956-4E74-A2AD-F9A7B18921F1">
+                        <File Id="file_16_libwinpthread_1.dll" Name="libwinpthread-1.dll" Source="libwinpthread-1.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp17" Guid="6364C67E-3B30-4EC3-AD83-C40325DCF6AD">
+                        <File Id="file_17_libgcc_s_dw2_1.dll" Name="libgcc_s_dw2-1.dll" Source="libgcc_s_dw2-1.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp18" Guid="852B69CF-CC41-4A70-98EF-8042C3458FD4">
+                        <File Id="file_18_libstdc___6.dll" Name="libstdc++-6.dll" Source="libstdc++-6.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp19" Guid="49A6779C-83CF-4071-B87C-6B9C1DFB1729">
+                        <File Id="file_19_agent_auth.exe" Name="agent-auth.exe" Source="agent-auth.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp20" Guid="25E69FE6-F00F-4D43-B753-59636D202DFE">
+                        <File Id="file_20_wpk_root.pem" Name="wpk_root.pem" Source="../../etc/wpk_root.pem" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp21" Guid="6B701972-4CE0-4ED7-91DD-D3589474E80E">
+                        <File Id="file_21_libwazuhext.dll" Name="libwazuhext.dll" Source="../libwazuhext.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp22" Guid="D6752452-88C8-456B-B3ED-95FAB918AE59">
+                        <File Id="file_22_libwazuhshared.dll" Name="libwazuhshared.dll" Source="../libwazuhshared.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp23" Guid="E5231646-58AC-4F57-A527-8F8E1E0BCCE6">
+                        <File Id="file_23_dbsync.dll" Name="dbsync.dll" Source="../shared_modules/dbsync/build/bin/dbsync.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp24" Guid="4AEFE8BD-AD79-4327-8C43-E7BFB58B1A13">
+                        <File Id="file_24_rsync.dll" Name="rsync.dll" Source="../shared_modules/rsync/build/bin/rsync.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp25" Guid="E1887F44-A72D-4D33-BAD2-03E016BBBD8C">
+                        <File Id="file_25_sysinfo.dll" Name="sysinfo.dll" Source="../data_provider/build/bin/sysinfo.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp26" Guid="AF93AA22-DE34-4FF8-8814-3C7A231D303D">
+                        <File Id="file_26_syscollector.dll" Name="syscollector.dll" Source="../wazuh_modules/syscollector/build/bin/syscollector.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp27" Guid="8EEBE455-B794-4E0C-A00B-DD67256CADAE">
+                        <File Id="file_27_libfimdb.dll" Name="libfimdb.dll" Source="../syscheckd/build/bin/libfimdb.dll" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp28" Guid="A342EEF1-8D70-4E1E-A751-2F42CF21091E">
+                        <File Id="file_28_VERSION.json" Name="VERSION.json" Source="VERSION.json" KeyPath="yes" />
+                    </Component>
+                    <Component Id="cmp29" Guid="9C95689A-5DDA-4536-A7EC-718D1A7B655C">
+                        <File Id="file_29_clamav_ui.exe" Name="clamav_ui.exe" Source="ui/clamav_ui.exe" KeyPath="yes" />
+                    </Component>
+                    <Component Id="RegistryEntries" Guid="C93028F5-BC85-4240-8F71-E0C70CB0605A">
+                        <RegistryValue Root="HKLM" Key="SOFTWARE\MonitoringAgent" Name="Install_Dir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+                        <!-- Create uninstall.exe shortcut in the installation folder itself -->
+                        <Shortcut Id="FolderUninstallProduct" Name="uninstall.exe" Description="Uninstalls The Monitoring Agent" Target="[SystemFolder]msiexec.exe" Arguments="/x [ProductCode]"/>
+                    </Component>
                     <Directory Id="DIR_active_response" Name="active-response">
+                        <Component Id="cmpEmptyDIR_active_response" Guid="45CC8B20-EDB6-41AE-ACBF-5C8B948D0A3D">
+                            <CreateFolder />
+                        </Component>
                         <Directory Id="DIR_active_response_bin" Name="bin">
+                            <Component Id="cmp30" Guid="B11555BA-6631-4FE5-8C54-EDFD57F812C9">
+                                <File Id="file_30_route_null.exe" Name="route-null.exe" Source="route-null.exe" KeyPath="yes" />
+                            </Component>
+                            <Component Id="cmp31" Guid="AD61DB63-DB54-4EAF-A571-5ABD6AEDDB5E">
+                                <File Id="file_31_restart_monitoring.exe" Name="restart-monitoring.exe" Source="restart-wazuh.exe" KeyPath="yes" />
+                            </Component>
+                            <Component Id="cmp32" Guid="91F25C41-4DEE-4159-9C74-F26F3F71AA76">
+                                <File Id="file_32_netsh.exe" Name="netsh.exe" Source="netsh.exe" KeyPath="yes" />
+                            </Component>
+                            <Component Id="cmp33" Guid="A6D20B47-03E9-4B73-BBB0-3CFE2021AADF">
+                                <File Id="file_33_clamav_scan.exe" Name="clamav-scan.exe" Source="clamav-scan.exe" KeyPath="yes" />
+                            </Component>
+                        </Directory>
+                    </Directory>
                     <Directory Id="DIR_bookmarks" Name="bookmarks">
+                        <Component Id="cmpEmptyDIR_bookmarks" Guid="CE42AF79-3601-4515-8B31-601BF2F8CB24">
+                            <CreateFolder />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_clamav" Name="clamav">
+                        <Component Id="cmp34" Guid="766F55F3-BEDA-4CE0-9668-9F4499EFA478">
+                            <File Id="file_34_ClamAVControl.ps1" Name="ClamAVControl.ps1" Source="clamav/ClamAVControl.ps1" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp35" Guid="57603849-635C-4FBF-A7B9-3B9910A8B5CD">
+                            <File Id="file_35_clamav_schedule.conf" Name="clamav_schedule.conf" Source="clamav/clamav_schedule.conf" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp36" Guid="1D09CB7C-C89C-43C4-9344-2F9B5B3266FA">
+                            <File Id="file_36_clamd.exe" Name="clamd.exe" Source="vendor/clamd.exe" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp37" Guid="D385FC50-6CA7-4599-8A20-63298D5B977F">
+                            <File Id="file_37_clamscan.exe" Name="clamscan.exe" Source="vendor/clamscan.exe" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp38" Guid="E829A3AA-E282-4280-890E-01090C0B7ED4">
+                            <File Id="file_38_freshclam.exe" Name="freshclam.exe" Source="vendor/freshclam.exe" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp39" Guid="DE282311-DFE2-4C49-B409-01F65C9EF6B6">
+                            <File Id="file_39_clamscan.conf" Name="clamscan.conf" Source="vendor/clamscan.conf" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp40" Guid="718D1659-E6DB-4F9F-BD90-95C16B430C44">
+                            <File Id="file_40_freshclam.conf" Name="freshclam.conf" Source="vendor/freshclam.conf" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp41" Guid="FBC54FC4-7AC9-4334-942F-07A132880852">
+                            <File Id="file_41_libclamav.dll" Name="libclamav.dll" Source="vendor/libclamav.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp42" Guid="FCA76DFA-665E-4EBB-AB0A-C896CE355F00">
+                            <File Id="file_42_libfreshclam.dll" Name="libfreshclam.dll" Source="vendor/libfreshclam.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp43" Guid="B26FFA15-55CF-4EBD-8305-909A43493327">
+                            <File Id="file_43_libclammspack.dll" Name="libclammspack.dll" Source="vendor/libclammspack.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp44" Guid="A3066EF3-8714-42D4-8725-D2577C76253C">
+                            <File Id="file_44_libclamunrar.dll" Name="libclamunrar.dll" Source="vendor/libclamunrar.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp45" Guid="F4CA55EB-F102-42DC-A6C3-73A16A3F0764">
+                            <File Id="file_45_libclamunrar_iface.dll" Name="libclamunrar_iface.dll" Source="vendor/libclamunrar_iface.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp46" Guid="9375AA8F-4D38-4A1F-BD49-CAE256397E9F">
+                            <File Id="file_46_libcrypto_3_x64.dll" Name="libcrypto-3-x64.dll" Source="vendor/libcrypto-3-x64.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp47" Guid="56974A3C-67DC-4A1B-982B-51F253BFA88E">
+                            <File Id="file_47_libssl_3_x64.dll" Name="libssl-3-x64.dll" Source="vendor/libssl-3-x64.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp48" Guid="909F5CE9-D706-4320-9613-6E19525F1818">
+                            <File Id="file_48_libcurl.dll" Name="libcurl.dll" Source="vendor/libcurl.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp49" Guid="0374F16B-399B-453B-B1FE-6F6D7FBB83F6">
+                            <File Id="file_49_libssh2.dll" Name="libssh2.dll" Source="vendor/libssh2.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp50" Guid="D1AE1847-16D1-45A9-A79B-4CA91DD3B3C9">
+                            <File Id="file_50_nghttp2.dll" Name="nghttp2.dll" Source="vendor/nghttp2.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp51" Guid="2B8DA704-C660-4DCD-A4F2-F4BDA8625EEA">
+                            <File Id="file_51_json_c.dll" Name="json-c.dll" Source="vendor/json-c.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp52" Guid="D996F327-CE8C-4FC4-B95A-11E3D2AFDCAE">
+                            <File Id="file_52_libxml2.dll" Name="libxml2.dll" Source="vendor/libxml2.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp53" Guid="7B488781-DD4F-4D0C-8D22-0C51BFD16318">
+                            <File Id="file_53_pcre2_8.dll" Name="pcre2-8.dll" Source="vendor/pcre2-8.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp54" Guid="D4D73FEA-C0BB-48A2-86D8-7302ECA9E130">
+                            <File Id="file_54_libbz2.dll" Name="libbz2.dll" Source="vendor/libbz2.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp55" Guid="C4D92FE3-C2F2-4CBD-A1C7-2F7AE4E40443">
+                            <File Id="file_55_pthreadVC3.dll" Name="pthreadVC3.dll" Source="vendor/pthreadVC3.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp56" Guid="930B35C8-E8BE-4A99-8787-AF0E79402EA8">
+                            <File Id="file_56_pdcurses.dll" Name="pdcurses.dll" Source="vendor/pdcurses.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp57" Guid="F1DFD7DD-17C4-47A7-866F-11D6FF42610B">
+                            <File Id="file_57_concrt140.dll" Name="concrt140.dll" Source="vendor/concrt140.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp58" Guid="47939CCE-89B2-4BDA-BECC-23EB2D9C467E">
+                            <File Id="file_58_msvcp140.dll" Name="msvcp140.dll" Source="vendor/msvcp140.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp59" Guid="E0C4B063-B286-4BF2-821D-74862E5E9E29">
+                            <File Id="file_59_msvcp140_1.dll" Name="msvcp140_1.dll" Source="vendor/msvcp140_1.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp60" Guid="A3177218-5722-44F5-A66A-CEAF2AFDC3EC">
+                            <File Id="file_60_msvcp140_2.dll" Name="msvcp140_2.dll" Source="vendor/msvcp140_2.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp61" Guid="CF00CDD8-3B1A-4677-8F70-94A5788BC941">
+                            <File Id="file_61_msvcp140_atomic_wait.dll" Name="msvcp140_atomic_wait.dll" Source="vendor/msvcp140_atomic_wait.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp62" Guid="84A5FF0E-7456-4483-831B-9425F5931D75">
+                            <File Id="file_62_msvcp140_codecvt_ids.dll" Name="msvcp140_codecvt_ids.dll" Source="vendor/msvcp140_codecvt_ids.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp63" Guid="77FF841F-0D8B-45B0-8B9B-D916F1C9402C">
+                            <File Id="file_63_vcruntime140.dll" Name="vcruntime140.dll" Source="vendor/vcruntime140.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp64" Guid="D5DD5BE4-47FF-4333-BAA3-8DA34EEF2211">
+                            <File Id="file_64_vcruntime140_1.dll" Name="vcruntime140_1.dll" Source="vendor/vcruntime140_1.dll" KeyPath="yes" />
+                        </Component>
                         <Directory Id="DIR_clamav_database" Name="database">
+                            <Component Id="cmp65" Guid="CDBA845B-CC25-46E1-BE22-0D62484CA997">
+                                <File Id="file_65_main.cvd" Name="main.cvd" Source="vendor/database/main.cvd" KeyPath="yes" />
+                            </Component>
+                            <Component Id="cmp66" Guid="33EB6C3B-BF5D-49F7-966E-A56D6C995DCE">
+                                <File Id="file_66_daily.cld" Name="daily.cld" Source="vendor/database/daily.cld" KeyPath="yes" />
+                            </Component>
+                            <Component Id="cmp67" Guid="7BEC8CC0-760A-4D2B-9BF9-BE9022BC5F73">
+                                <File Id="file_67_bytecode.cvd" Name="bytecode.cvd" Source="vendor/database/bytecode.cvd" KeyPath="yes" />
+                            </Component>
+                            <Component Id="cmp68" Guid="EA0A9AF1-2C23-4C98-870A-BB22C4B0650C">
+                                <File Id="file_68_freshclam.dat" Name="freshclam.dat" Source="vendor/database/freshclam.dat" KeyPath="yes" />
+                            </Component>
+                        </Directory>
                         <Directory Id="DIR_clamav_logs" Name="logs">
+                            <Component Id="cmpEmptyDIR_clamav_logs" Guid="DC4EB3D2-E371-44ED-B2D3-982F34E0D17C">
+                                <CreateFolder />
+                            </Component>
+                        </Directory>
+                    </Directory>
                     <Directory Id="DIR_incoming" Name="incoming">
+                        <Component Id="cmpEmptyDIR_incoming" Guid="05DD452F-3E70-4E21-B6E8-AC5592BBD036">
+                            <CreateFolder />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_logs" Name="logs">
+                        <Component Id="cmpEmptyDIR_logs" Guid="3FB2FCF5-22B8-41C1-8947-8C9B2C90D269">
+                            <CreateFolder />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_npcap" Name="npcap">
+                        <Component Id="cmp69" Guid="2D271686-5740-4190-B661-8BFF99A35FE8">
+                            <File Id="file_69_NpcapHelper.exe" Name="NpcapHelper.exe" Source="npcap/NpcapHelper.exe" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp70" Guid="99903BD6-B399-44EA-85D7-DD1D9701E017">
+                            <File Id="file_70_Packet.dll" Name="Packet.dll" Source="npcap/Packet.dll" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp71" Guid="AA0B0669-38DB-4E5E-8503-69A441E3F086">
+                            <File Id="file_71_WlanHelper.exe" Name="WlanHelper.exe" Source="npcap/WlanHelper.exe" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp72" Guid="D2AB4AA7-BEE8-4B56-9BC1-534C23518805">
+                            <File Id="file_72_wpcap.dll" Name="wpcap.dll" Source="npcap/wpcap.dll" KeyPath="yes" />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_queue" Name="queue">
+                        <Component Id="cmpEmptyDIR_queue" Guid="C932C2A5-AE34-415A-88DE-D86F5C97AC2B">
+                            <CreateFolder />
+                        </Component>
                         <Directory Id="DIR_queue_diff" Name="diff">
+                            <Component Id="cmpEmptyDIR_queue_diff" Guid="9A211620-021A-4837-8714-8A025BEF32F7">
+                                <CreateFolder />
+                            </Component>
+                        </Directory>
                         <Directory Id="DIR_queue_fim" Name="fim">
+                            <Component Id="cmpEmptyDIR_queue_fim" Guid="3CB182BF-5EE2-4306-9543-049E3A07AD01">
+                                <CreateFolder />
+                            </Component>
                             <Directory Id="DIR_queue_fim_db" Name="db">
+                                <Component Id="cmpEmptyDIR_queue_fim_db" Guid="F2616160-2D87-4673-A206-9B478C65F67F">
+                                    <CreateFolder />
+                                </Component>
+                            </Directory>
+                        </Directory>
                         <Directory Id="DIR_queue_logcollector" Name="logcollector">
+                            <Component Id="cmpEmptyDIR_queue_logcollector" Guid="D83765E6-7D8A-4EE6-AA09-96683EDDD47A">
+                                <CreateFolder />
+                            </Component>
+                        </Directory>
                         <Directory Id="DIR_queue_syscollector" Name="syscollector">
+                            <Component Id="cmp73" Guid="F33DAE13-8D37-40DD-A22B-94DACED3B5FD">
+                                <File Id="file_73_norm_config.json" Name="norm_config.json" Source="../wazuh_modules/syscollector/norm_config.json" KeyPath="yes" />
+                            </Component>
                             <Directory Id="DIR_queue_syscollector_db" Name="db">
+                                <Component Id="cmpEmptyDIR_queue_syscollector_db" Guid="D0CC8956-6717-40CD-9894-364627142B88">
+                                    <CreateFolder />
+                                </Component>
+                            </Directory>
+                        </Directory>
+                    </Directory>
                     <Directory Id="DIR_rids" Name="rids">
+                        <Component Id="cmpEmptyDIR_rids" Guid="29C090A7-98BE-4642-AC9A-83BA9CEA6B7B">
+                            <CreateFolder />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_ruleset" Name="ruleset">
-                        <Directory Id="DIR_ruleset_" Name="">
+                        <Component Id="cmpEmptyDIR_ruleset" Guid="71A14AED-DD45-4E21-A1B1-C1960CCD2761">
+                            <CreateFolder />
+                        </Component>
                         <Directory Id="DIR_ruleset_sca" Name="sca">
+                            <Component Id="cmp74" Guid="25B9529A-D230-44AC-8601-37000A3BB6C8">
+                                <File Id="file_74_cis_win11_enterprise.yml" Name="cis_win11_enterprise.yml" Source="../../ruleset/sca/windows/cis_win11_enterprise.yml" KeyPath="yes" />
+                            </Component>
+                            <Component Id="cmp75" Guid="5929E62F-B4AD-410C-B3AE-C021F99123C0">
+                                <File Id="file_75_cis_win10_enterprisce.yml" Name="cis_win10_enterprisce.yml" Source="../../ruleset/sca/windows/cis_win10_enterprise.yml" KeyPath="yes" />
+                            </Component>
+                        </Directory>
+                    </Directory>
                     <Directory Id="DIR_shared" Name="shared">
+                        <Component Id="cmp76" Guid="275C179B-97C5-4BE4-94B2-8BF75B2E57EB">
+                            <File Id="file_76_rootkit_trojans.txt" Name="rootkit_trojans.txt" Source="../../ruleset/rootcheck/db/rootkit_trojans.txt" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp77" Guid="B65733AC-2310-4BAD-871F-1F9BD6123931">
+                            <File Id="file_77_rootkit_files.txt" Name="rootkit_files.txt" Source="../../ruleset/rootcheck/db/rootkit_files.txt" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp78" Guid="38B3D2F0-8550-4711-85A7-0FF416414936">
+                            <File Id="file_78_win_applications_rcl.txt" Name="win_applications_rcl.txt" Source="../../ruleset/rootcheck/db/win_applications_rcl.txt" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp79" Guid="D8986183-08FF-4C11-AB3B-2EA4604CD350">
+                            <File Id="file_79_win_malware_rcl.txt" Name="win_malware_rcl.txt" Source="../../ruleset/rootcheck/db/win_malware_rcl.txt" KeyPath="yes" />
+                        </Component>
+                        <Component Id="cmp80" Guid="F9430EC4-389B-444A-9527-CAF71A95D58C">
+                            <File Id="file_80_win_audit_rcl.txt" Name="win_audit_rcl.txt" Source="../../ruleset/rootcheck/db/win_audit_rcl.txt" KeyPath="yes" />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_syscheck" Name="syscheck">
+                        <Component Id="cmpEmptyDIR_syscheck" Guid="A49658A0-92D1-44E5-8E6B-F41F9BB2A9E9">
+                            <CreateFolder />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_tmp" Name="tmp">
+                        <Component Id="cmpEmptyDIR_tmp" Guid="81BC6C49-CE6C-411F-B1AC-05EC474EF291">
+                            <CreateFolder />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_upgrade" Name="upgrade">
+                        <Component Id="cmpEmptyDIR_upgrade" Guid="302E23B9-1962-4268-925C-4413121485CE">
+                            <CreateFolder />
+                        </Component>
+                    </Directory>
                     <Directory Id="DIR_wodles" Name="wodles">
-                    </Directory>
-                    </Directory>
-                    </Directory>
-                    </Directory>
-                    </Directory>
-                        </Directory>
-                        </Directory>
-                    </Directory>
-                    </Directory>
-                            </Directory>
-                        </Directory>
-                        </Directory>
-                            </Directory>
-                        </Directory>
-                        </Directory>
-                    </Directory>
-                    </Directory>
-                    </Directory>
-                    </Directory>
-                        </Directory>
-                        </Directory>
-                    </Directory>
-                    </Directory>
-                        </Directory>
-                    </Directory>
-                        </Directory>
+                        <Component Id="cmpEmptyDIR_wodles" Guid="D52F5342-4A51-4B23-9B45-E3CA39F52991">
+                            <CreateFolder />
+                        </Component>
                     </Directory>
                 </Directory>
             </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="Monitoring Agent">
+                    <Component Id="ApplicationShortcut" Guid="24B666C8-D71F-41C8-94C2-5AD74DF9D50E">
+                        <Shortcut Id="ShortcutWin32UI" Name="Manage Agent" Description="Manage Monitoring Agent" Target="[INSTALLFOLDER]win32ui.exe" WorkingDirectory="INSTALLFOLDER"/>
+                        <Shortcut Id="ShortcutClamAV" Name="ClamAV Manager" Description="ClamAV Manager" Target="[INSTALLFOLDER]clamav_ui.exe" WorkingDirectory="INSTALLFOLDER"/>
+                        <!-- Uninstaller Shortcut in Start Menu -->
+                        <Shortcut Id="UninstallProduct" Name="Uninstall Monitoring Agent" Description="Uninstalls The Monitoring Agent" Target="[SystemFolder]msiexec.exe" Arguments="/x [ProductCode]"/>
+                        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
+                        <RegistryValue Root="HKCU" Key="Software\MonitoringAgent" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                    </Component>
+                </Directory>
+            </Directory>
         </Directory>
-        <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-            <Component Id="cmp1" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_1_monitoring_agent.exe" Name="monitoring-agent.exe" Source="monitoring-agent.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp2" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_2_monitoring_agent_eventchannel.exe" Name="monitoring-agent-eventchannel.exe" Source="monitoring-agent-eventchannel.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp3" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_3_ossec.conf" Name="ossec.conf" Source="ossec.conf" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp4" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_4_manage_agents.exe" Name="manage_agents.exe" Source="manage_agents.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp5" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_5_win32ui.exe" Name="win32ui.exe" Source="os_win32ui.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp6" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_6_internal_options.conf" Name="internal_options.conf" Source="internal_options.conf" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp7" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_7_default_local_internal_options.conf" Name="default-local_internal_options.conf" Source="default-local_internal_options.conf" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp8" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_8_setup_windows.exe" Name="setup-windows.exe" Source="setup-windows.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp9" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_9_setup_syscheck.exe" Name="setup-syscheck.exe" Source="setup-syscheck.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp10" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_10_setup_iis.exe" Name="setup-iis.exe" Source="setup-iis.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp11" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_11_doc.html" Name="doc.html" Source="doc.html" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp12" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_12_favicon.ico" Name="favicon.ico" Source="favicon.ico" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp13" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_13_LICENSE.txt" Name="LICENSE.txt" Source="LICENSE.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp14" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_14_help.txt" Name="help.txt" Source="help_win.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp15" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_15_vista_sec.txt" Name="vista_sec.txt" Source="vista_sec.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp16" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_16_libwinpthread_1.dll" Name="libwinpthread-1.dll" Source="libwinpthread-1.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp17" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_17_libgcc_s_dw2_1.dll" Name="libgcc_s_dw2-1.dll" Source="libgcc_s_dw2-1.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp18" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_18_libstdc___6.dll" Name="libstdc++-6.dll" Source="libstdc++-6.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp19" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_19_agent_auth.exe" Name="agent-auth.exe" Source="agent-auth.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp20" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_20_wpk_root.pem" Name="wpk_root.pem" Source="../../etc/wpk_root.pem" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp21" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_21_libwazuhext.dll" Name="libwazuhext.dll" Source="../libwazuhext.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp22" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_22_libwazuhshared.dll" Name="libwazuhshared.dll" Source="../libwazuhshared.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp23" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_23_dbsync.dll" Name="dbsync.dll" Source="../shared_modules/dbsync/build/bin/dbsync.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp24" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_24_rsync.dll" Name="rsync.dll" Source="../shared_modules/rsync/build/bin/rsync.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp25" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_25_sysinfo.dll" Name="sysinfo.dll" Source="../data_provider/build/bin/sysinfo.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp26" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_26_syscollector.dll" Name="syscollector.dll" Source="../wazuh_modules/syscollector/build/bin/syscollector.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp27" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_27_libfimdb.dll" Name="libfimdb.dll" Source="../syscheckd/build/bin/libfimdb.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp28" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_28_VERSION.json" Name="VERSION.json" Source="VERSION.json" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp29" Guid="*" Directory="INSTALLFOLDER">
-                <File Id="file_29_clamav_ui.exe" Name="clamav_ui.exe" Source="ui/clamav_ui.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmpEmpty$SMPROGRAMS_Monitoring Agent" Guid="*" Directory="DIR_$SMPROGRAMS_Monitoring Agent">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyactive_response" Guid="*" Directory="DIR_active_response">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmp30" Guid="*" Directory="DIR_active_response_bin">
-                <File Id="file_30_route_null.exe" Name="route-null.exe" Source="route-null.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp31" Guid="*" Directory="DIR_active_response_bin">
-                <File Id="file_31_restart_monitoring.exe" Name="restart-monitoring.exe" Source="restart-wazuh.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp32" Guid="*" Directory="DIR_active_response_bin">
-                <File Id="file_32_netsh.exe" Name="netsh.exe" Source="netsh.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp33" Guid="*" Directory="DIR_active_response_bin">
-                <File Id="file_33_clamav_scan.exe" Name="clamav-scan.exe" Source="clamav-scan.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmpEmptybookmarks" Guid="*" Directory="DIR_bookmarks">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmp34" Guid="*" Directory="DIR_clamav">
-                <File Id="file_34_ClamAVControl.ps1" Name="ClamAVControl.ps1" Source="clamav/ClamAVControl.ps1" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp35" Guid="*" Directory="DIR_clamav">
-                <File Id="file_35_clamav_schedule.conf" Name="clamav_schedule.conf" Source="clamav/clamav_schedule.conf" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp36" Guid="*" Directory="DIR_clamav">
-                <File Id="file_36_clamd.exe" Name="clamd.exe" Source="vendor/clamd.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp37" Guid="*" Directory="DIR_clamav">
-                <File Id="file_37_clamscan.exe" Name="clamscan.exe" Source="vendor/clamscan.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp38" Guid="*" Directory="DIR_clamav">
-                <File Id="file_38_freshclam.exe" Name="freshclam.exe" Source="vendor/freshclam.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp39" Guid="*" Directory="DIR_clamav">
-                <File Id="file_39_clamscan.conf" Name="clamscan.conf" Source="vendor/clamscan.conf" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp40" Guid="*" Directory="DIR_clamav">
-                <File Id="file_40_freshclam.conf" Name="freshclam.conf" Source="vendor/freshclam.conf" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp41" Guid="*" Directory="DIR_clamav">
-                <File Id="file_41_libclamav.dll" Name="libclamav.dll" Source="vendor/libclamav.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp42" Guid="*" Directory="DIR_clamav">
-                <File Id="file_42_libfreshclam.dll" Name="libfreshclam.dll" Source="vendor/libfreshclam.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp43" Guid="*" Directory="DIR_clamav">
-                <File Id="file_43_libclammspack.dll" Name="libclammspack.dll" Source="vendor/libclammspack.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp44" Guid="*" Directory="DIR_clamav">
-                <File Id="file_44_libclamunrar.dll" Name="libclamunrar.dll" Source="vendor/libclamunrar.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp45" Guid="*" Directory="DIR_clamav">
-                <File Id="file_45_libclamunrar_iface.dll" Name="libclamunrar_iface.dll" Source="vendor/libclamunrar_iface.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp46" Guid="*" Directory="DIR_clamav">
-                <File Id="file_46_libcrypto_3_x64.dll" Name="libcrypto-3-x64.dll" Source="vendor/libcrypto-3-x64.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp47" Guid="*" Directory="DIR_clamav">
-                <File Id="file_47_libssl_3_x64.dll" Name="libssl-3-x64.dll" Source="vendor/libssl-3-x64.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp48" Guid="*" Directory="DIR_clamav">
-                <File Id="file_48_libcurl.dll" Name="libcurl.dll" Source="vendor/libcurl.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp49" Guid="*" Directory="DIR_clamav">
-                <File Id="file_49_libssh2.dll" Name="libssh2.dll" Source="vendor/libssh2.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp50" Guid="*" Directory="DIR_clamav">
-                <File Id="file_50_nghttp2.dll" Name="nghttp2.dll" Source="vendor/nghttp2.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp51" Guid="*" Directory="DIR_clamav">
-                <File Id="file_51_json_c.dll" Name="json-c.dll" Source="vendor/json-c.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp52" Guid="*" Directory="DIR_clamav">
-                <File Id="file_52_libxml2.dll" Name="libxml2.dll" Source="vendor/libxml2.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp53" Guid="*" Directory="DIR_clamav">
-                <File Id="file_53_pcre2_8.dll" Name="pcre2-8.dll" Source="vendor/pcre2-8.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp54" Guid="*" Directory="DIR_clamav">
-                <File Id="file_54_libbz2.dll" Name="libbz2.dll" Source="vendor/libbz2.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp55" Guid="*" Directory="DIR_clamav">
-                <File Id="file_55_pthreadVC3.dll" Name="pthreadVC3.dll" Source="vendor/pthreadVC3.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp56" Guid="*" Directory="DIR_clamav">
-                <File Id="file_56_pdcurses.dll" Name="pdcurses.dll" Source="vendor/pdcurses.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp57" Guid="*" Directory="DIR_clamav">
-                <File Id="file_57_concrt140.dll" Name="concrt140.dll" Source="vendor/concrt140.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp58" Guid="*" Directory="DIR_clamav">
-                <File Id="file_58_msvcp140.dll" Name="msvcp140.dll" Source="vendor/msvcp140.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp59" Guid="*" Directory="DIR_clamav">
-                <File Id="file_59_msvcp140_1.dll" Name="msvcp140_1.dll" Source="vendor/msvcp140_1.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp60" Guid="*" Directory="DIR_clamav">
-                <File Id="file_60_msvcp140_2.dll" Name="msvcp140_2.dll" Source="vendor/msvcp140_2.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp61" Guid="*" Directory="DIR_clamav">
-                <File Id="file_61_msvcp140_atomic_wait.dll" Name="msvcp140_atomic_wait.dll" Source="vendor/msvcp140_atomic_wait.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp62" Guid="*" Directory="DIR_clamav">
-                <File Id="file_62_msvcp140_codecvt_ids.dll" Name="msvcp140_codecvt_ids.dll" Source="vendor/msvcp140_codecvt_ids.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp63" Guid="*" Directory="DIR_clamav">
-                <File Id="file_63_vcruntime140.dll" Name="vcruntime140.dll" Source="vendor/vcruntime140.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp64" Guid="*" Directory="DIR_clamav">
-                <File Id="file_64_vcruntime140_1.dll" Name="vcruntime140_1.dll" Source="vendor/vcruntime140_1.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp65" Guid="*" Directory="DIR_clamav_database">
-                <File Id="file_65_main.cvd" Name="main.cvd" Source="vendor/database/main.cvd" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp66" Guid="*" Directory="DIR_clamav_database">
-                <File Id="file_66_daily.cld" Name="daily.cld" Source="vendor/database/daily.cld" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp67" Guid="*" Directory="DIR_clamav_database">
-                <File Id="file_67_bytecode.cvd" Name="bytecode.cvd" Source="vendor/database/bytecode.cvd" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp68" Guid="*" Directory="DIR_clamav_database">
-                <File Id="file_68_freshclam.dat" Name="freshclam.dat" Source="vendor/database/freshclam.dat" KeyPath="yes" />
-            </Component>
-            <Component Id="cmpEmptyclamav_logs" Guid="*" Directory="DIR_clamav_logs">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyincoming" Guid="*" Directory="DIR_incoming">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptylogs" Guid="*" Directory="DIR_logs">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmp69" Guid="*" Directory="DIR_npcap">
-                <File Id="file_69_NpcapHelper.exe" Name="NpcapHelper.exe" Source="npcap/NpcapHelper.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp70" Guid="*" Directory="DIR_npcap">
-                <File Id="file_70_Packet.dll" Name="Packet.dll" Source="npcap/Packet.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp71" Guid="*" Directory="DIR_npcap">
-                <File Id="file_71_WlanHelper.exe" Name="WlanHelper.exe" Source="npcap/WlanHelper.exe" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp72" Guid="*" Directory="DIR_npcap">
-                <File Id="file_72_wpcap.dll" Name="wpcap.dll" Source="npcap/wpcap.dll" KeyPath="yes" />
-            </Component>
-            <Component Id="cmpEmptyqueue" Guid="*" Directory="DIR_queue">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyqueue_diff" Guid="*" Directory="DIR_queue_diff">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyqueue_fim" Guid="*" Directory="DIR_queue_fim">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyqueue_fim_db" Guid="*" Directory="DIR_queue_fim_db">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyqueue_logcollector" Guid="*" Directory="DIR_queue_logcollector">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmp73" Guid="*" Directory="DIR_queue_syscollector">
-                <File Id="file_73_norm_config.json" Name="norm_config.json" Source="../wazuh_modules/syscollector/norm_config.json" KeyPath="yes" />
-            </Component>
-            <Component Id="cmpEmptyqueue_syscollector_db" Guid="*" Directory="DIR_queue_syscollector_db">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyrids" Guid="*" Directory="DIR_rids">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyruleset" Guid="*" Directory="DIR_ruleset">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyruleset_" Guid="*" Directory="DIR_ruleset_">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmp74" Guid="*" Directory="DIR_ruleset_sca">
-                <File Id="file_74_cis_win11_enterprise.yml" Name="cis_win11_enterprise.yml" Source="../../ruleset/sca/windows/cis_win11_enterprise.yml" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp75" Guid="*" Directory="DIR_ruleset_sca">
-                <File Id="file_75_cis_win10_enterprisce.yml" Name="cis_win10_enterprisce.yml" Source="../../ruleset/sca/windows/cis_win10_enterprise.yml" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp76" Guid="*" Directory="DIR_shared">
-                <File Id="file_76_rootkit_trojans.txt" Name="rootkit_trojans.txt" Source="../../ruleset/rootcheck/db/rootkit_trojans.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp77" Guid="*" Directory="DIR_shared">
-                <File Id="file_77_rootkit_files.txt" Name="rootkit_files.txt" Source="../../ruleset/rootcheck/db/rootkit_files.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp78" Guid="*" Directory="DIR_shared">
-                <File Id="file_78_win_applications_rcl.txt" Name="win_applications_rcl.txt" Source="../../ruleset/rootcheck/db/win_applications_rcl.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp79" Guid="*" Directory="DIR_shared">
-                <File Id="file_79_win_malware_rcl.txt" Name="win_malware_rcl.txt" Source="../../ruleset/rootcheck/db/win_malware_rcl.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmp80" Guid="*" Directory="DIR_shared">
-                <File Id="file_80_win_audit_rcl.txt" Name="win_audit_rcl.txt" Source="../../ruleset/rootcheck/db/win_audit_rcl.txt" KeyPath="yes" />
-            </Component>
-            <Component Id="cmpEmptysyscheck" Guid="*" Directory="DIR_syscheck">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptytmp" Guid="*" Directory="DIR_tmp">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptyupgrade" Guid="*" Directory="DIR_upgrade">
-                <CreateFolder />
-            </Component>
-            <Component Id="cmpEmptywodles" Guid="*" Directory="DIR_wodles">
-                <CreateFolder />
-            </Component>
-            <Component Id="RegistryEntries" Guid="*" Directory="INSTALLFOLDER">
-                <RegistryValue Root="HKLM" Key="SOFTWARE\MonitoringAgent" Name="Install_Dir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
-            </Component>
+        <ComponentGroup Id="ProductComponents">
+            <ComponentRef Id="cmp1" />
+            <ComponentRef Id="cmp2" />
+            <ComponentRef Id="cmp3" />
+            <ComponentRef Id="cmp4" />
+            <ComponentRef Id="cmp5" />
+            <ComponentRef Id="cmp6" />
+            <ComponentRef Id="cmp7" />
+            <ComponentRef Id="cmp8" />
+            <ComponentRef Id="cmp9" />
+            <ComponentRef Id="cmp10" />
+            <ComponentRef Id="cmp11" />
+            <ComponentRef Id="cmp12" />
+            <ComponentRef Id="cmp13" />
+            <ComponentRef Id="cmp14" />
+            <ComponentRef Id="cmp15" />
+            <ComponentRef Id="cmp16" />
+            <ComponentRef Id="cmp17" />
+            <ComponentRef Id="cmp18" />
+            <ComponentRef Id="cmp19" />
+            <ComponentRef Id="cmp20" />
+            <ComponentRef Id="cmp21" />
+            <ComponentRef Id="cmp22" />
+            <ComponentRef Id="cmp23" />
+            <ComponentRef Id="cmp24" />
+            <ComponentRef Id="cmp25" />
+            <ComponentRef Id="cmp26" />
+            <ComponentRef Id="cmp27" />
+            <ComponentRef Id="cmp28" />
+            <ComponentRef Id="cmp29" />
+            <ComponentRef Id="RegistryEntries" />
+            <ComponentRef Id="cmpEmptyDIR_active_response" />
+            <ComponentRef Id="cmp30" />
+            <ComponentRef Id="cmp31" />
+            <ComponentRef Id="cmp32" />
+            <ComponentRef Id="cmp33" />
+            <ComponentRef Id="cmpEmptyDIR_bookmarks" />
+            <ComponentRef Id="cmp34" />
+            <ComponentRef Id="cmp35" />
+            <ComponentRef Id="cmp36" />
+            <ComponentRef Id="cmp37" />
+            <ComponentRef Id="cmp38" />
+            <ComponentRef Id="cmp39" />
+            <ComponentRef Id="cmp40" />
+            <ComponentRef Id="cmp41" />
+            <ComponentRef Id="cmp42" />
+            <ComponentRef Id="cmp43" />
+            <ComponentRef Id="cmp44" />
+            <ComponentRef Id="cmp45" />
+            <ComponentRef Id="cmp46" />
+            <ComponentRef Id="cmp47" />
+            <ComponentRef Id="cmp48" />
+            <ComponentRef Id="cmp49" />
+            <ComponentRef Id="cmp50" />
+            <ComponentRef Id="cmp51" />
+            <ComponentRef Id="cmp52" />
+            <ComponentRef Id="cmp53" />
+            <ComponentRef Id="cmp54" />
+            <ComponentRef Id="cmp55" />
+            <ComponentRef Id="cmp56" />
+            <ComponentRef Id="cmp57" />
+            <ComponentRef Id="cmp58" />
+            <ComponentRef Id="cmp59" />
+            <ComponentRef Id="cmp60" />
+            <ComponentRef Id="cmp61" />
+            <ComponentRef Id="cmp62" />
+            <ComponentRef Id="cmp63" />
+            <ComponentRef Id="cmp64" />
+            <ComponentRef Id="cmp65" />
+            <ComponentRef Id="cmp66" />
+            <ComponentRef Id="cmp67" />
+            <ComponentRef Id="cmp68" />
+            <ComponentRef Id="cmpEmptyDIR_clamav_logs" />
+            <ComponentRef Id="cmpEmptyDIR_incoming" />
+            <ComponentRef Id="cmpEmptyDIR_logs" />
+            <ComponentRef Id="cmp69" />
+            <ComponentRef Id="cmp70" />
+            <ComponentRef Id="cmp71" />
+            <ComponentRef Id="cmp72" />
+            <ComponentRef Id="cmpEmptyDIR_queue" />
+            <ComponentRef Id="cmpEmptyDIR_queue_diff" />
+            <ComponentRef Id="cmpEmptyDIR_queue_fim" />
+            <ComponentRef Id="cmpEmptyDIR_queue_fim_db" />
+            <ComponentRef Id="cmpEmptyDIR_queue_logcollector" />
+            <ComponentRef Id="cmp73" />
+            <ComponentRef Id="cmpEmptyDIR_queue_syscollector_db" />
+            <ComponentRef Id="cmpEmptyDIR_rids" />
+            <ComponentRef Id="cmpEmptyDIR_ruleset" />
+            <ComponentRef Id="cmp74" />
+            <ComponentRef Id="cmp75" />
+            <ComponentRef Id="cmp76" />
+            <ComponentRef Id="cmp77" />
+            <ComponentRef Id="cmp78" />
+            <ComponentRef Id="cmp79" />
+            <ComponentRef Id="cmp80" />
+            <ComponentRef Id="cmpEmptyDIR_syscheck" />
+            <ComponentRef Id="cmpEmptyDIR_tmp" />
+            <ComponentRef Id="cmpEmptyDIR_upgrade" />
+            <ComponentRef Id="cmpEmptyDIR_wodles" />
+            <ComponentRef Id="ApplicationShortcut" />
         </ComponentGroup>
-        <!-- Setup Services and Windows env -->
-        <CustomAction Id="InstallService" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]monitoring-agent.exe&quot; install-service" Execute="deferred" Impersonate="no" Return="ignore" />
-        <CustomAction Id="RunSetupWindows" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]setup-windows.exe&quot; &quot;[INSTALLFOLDER]&quot;" Execute="deferred" Impersonate="no" Return="ignore" />
-        <InstallExecuteSequence>
-            <Custom Action="InstallService" Before="InstallFinalize">NOT Installed</Custom>
-            <Custom Action="RunSetupWindows" After="InstallService">NOT Installed</Custom>
-        </InstallExecuteSequence>
     </Product>
 </Wix>

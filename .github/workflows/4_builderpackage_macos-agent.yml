@@ -1,0 +1,150 @@
+run-name: Package - Build macOS monitoring-agent ${{ inputs.architecture }} ${{ inputs.is_stage && '- is stage' || '' }} ${{ inputs.checksum && '- checksum' || '' }} ${{ inputs.debug && '- debug' || '' }}
+
+name: Package - Build macOS Monitoring Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: |
+          Target architecture of the package.
+          intel64 → runs on macos-13 (x86_64).
+          arm64   → runs on macos-14 (Apple Silicon).
+        type: choice
+        options:
+          - intel64
+          - arm64
+        default: intel64
+        required: true
+
+      revision:
+        description: |
+          Package revision appended to the version string (e.g. 4.13.1-<revision>).
+          Use "1" for release packages.
+        default: "0"
+        type: string
+        required: false
+
+      is_stage:
+        description: |
+          Use release-style package name (wazuh-agent-<ver>-<rev>.<arch>).
+          By default: false (a short git hash is appended instead).
+        type: boolean
+        default: false
+        required: false
+
+      debug:
+        description: |
+          Build binaries with debug symbols (no compiler optimisations).
+          By default: false.
+        type: boolean
+        default: false
+        required: false
+
+      checksum:
+        description: |
+          Generate SHA-512 checksum file alongside the package.
+          By default: false.
+        type: boolean
+        default: false
+        required: false
+
+      jobs:
+        description: "Number of parallel compilation jobs."
+        default: "3"
+        type: string
+        required: false
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────────
+  # intel64 build  (macOS 13 – x86_64)
+  # ──────────────────────────────────────────────────────────────────────────────
+  build-intel64:
+    name: Build macOS agent (intel64)
+    if: ${{ inputs.architecture == 'intel64' }}
+    runs-on: macos-13
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          # munkipkg is needed by generate_wazuh_packages.sh
+          git clone --depth=1 https://github.com/munki/munki-pkg.git ~/Developer/munki-pkg
+          sudo mkdir -p /usr/local/bin
+          sudo ln -sf "$HOME/Developer/munki-pkg/munkipkg" /usr/local/bin/munkipkg
+          munkipkg --version
+
+          # cmake (already present on GitHub runners, ensure latest)
+          brew install cmake || true
+
+          # Verify gcc ≥ 11
+          GCC_VER="$(brew list --versions gcc 2>/dev/null | awk '{print $2}')"
+          GCC_MAJOR="${GCC_VER%%.*}"
+          if [ "${GCC_MAJOR:-0}" -lt 11 ]; then
+            brew install gcc
+          fi
+
+      - name: Build macOS monitoring-agent package
+        run: |
+          cd packages/macos
+          sudo bash generate_wazuh_packages.sh \
+            -a intel64 \
+            -j ${{ inputs.jobs }} \
+            -r "${{ inputs.revision }}" \
+            ${{ inputs.debug     && '-d'          || '' }} \
+            ${{ inputs.checksum  && '-c'          || '' }} \
+            ${{ inputs.is_stage  && '--is_stage'  || '' }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-agent-macos-intel64
+          path: packages/macos/output/
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # arm64 build  (macOS 14 – Apple Silicon)
+  # ──────────────────────────────────────────────────────────────────────────────
+  build-arm64:
+    name: Build macOS agent (arm64)
+    if: ${{ inputs.architecture == 'arm64' }}
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          git clone --depth=1 https://github.com/munki/munki-pkg.git ~/Developer/munki-pkg
+          sudo mkdir -p /usr/local/bin
+          sudo ln -sf "$HOME/Developer/munki-pkg/munkipkg" /usr/local/bin/munkipkg
+          munkipkg --version
+
+          brew install binutils autoconf automake libtool cmake || true
+
+          GCC_VER="$(brew list --versions gcc 2>/dev/null | awk '{print $2}')"
+          GCC_MAJOR="${GCC_VER%%.*}"
+          if [ "${GCC_MAJOR:-0}" -lt 11 ]; then
+            brew install gcc
+          fi
+
+      - name: Build macOS monitoring-agent package
+        run: |
+          cd packages/macos
+          sudo bash generate_wazuh_packages.sh \
+            -a arm64 \
+            -j ${{ inputs.jobs }} \
+            -r "${{ inputs.revision }}" \
+            ${{ inputs.debug     && '-d'          || '' }} \
+            ${{ inputs.checksum  && '-c'          || '' }} \
+            ${{ inputs.is_stage  && '--is_stage'  || '' }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-agent-macos-arm64
+          path: packages/macos/output/
+          if-no-files-found: error
