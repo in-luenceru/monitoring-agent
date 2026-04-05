@@ -123,7 +123,7 @@ Install()
 
     # If update, stop Wazuh
     if [ "X${update_only}" = "Xyes" ]; then
-        echo "Stopping Wazuh..."
+        echo "Stopping Monitoring Agent..."
         UpdateStopOSSEC
     fi
 
@@ -141,23 +141,19 @@ Install()
     runInit $INSTYPE ${update_only}
     runinit_value=$?
 
-    # If update, start Wazuh
+    # If update, start Monitoring Agent
     if [ "X${update_only}" = "Xyes" ]; then
         WazuhUpgrade $INSTYPE
-        # Update versions previous to Wazuh 1.2
+        # Update versions previous to 1.2
         UpdateOldVersions
-        echo "Starting Wazuh..."
+        echo "Starting Monitoring Agent..."
         UpdateStartOSSEC
     fi
 
     if [ $runinit_value = 1 ]; then
         notmodified="yes"
     elif [ "X$START_WAZUH" = "Xyes" ]; then
-        echo "Starting Wazuh..."
-        UpdateStartOSSEC
-    fi
-
-}
+        echo "Starting Monitoring Agent..."
 
 ##########
 # UseSyscheck()
@@ -443,12 +439,12 @@ ConfigureServer()
             fi
 
             if [ -x "$HOST_CMD" ]; then
-              HOSTTMP=`${HOST_CMD} -W 5 -t mx wazuh.com 2>/dev/null`
+              HOSTTMP=`${HOST_CMD} -W 5 -t mx monitoring-solutions.com 2>/dev/null`
               if [ $? = 1 ]; then
                  # Trying without the -W
-                 HOSTTMP=`${HOST_CMD} -t mx wazuh.com 2>/dev/null`
+                 HOSTTMP=`${HOST_CMD} -t mx monitoring-solutions.com 2>/dev/null`
               fi
-              echo "x$HOSTTMP" | grep "wazuh.com mail is handled" > /dev/null 2>&1
+              echo "x$HOSTTMP" | grep "monitoring-solutions.com mail is handled" > /dev/null 2>&1
               if [ $? = 0 ]; then
                  # Breaking down the user e-mail
                  EMAILHOST=`echo ${EMAIL} | cut -d "@" -f 2`
@@ -624,7 +620,7 @@ askForDelete()
 
         case $ANSWER in
             $yesmatch)
-                echo "      Stopping Wazuh..."
+                echo "      Stopping Monitoring Agent..."
                 UpdateStopOSSEC
                 rm -rf $INSTALLDIR
                 if [ ! $? = 0 ]; then
@@ -767,7 +763,7 @@ AddPFTable()
     echo ""
     echo "   - ${pfmessage}:"
     echo "     ${moreinfo}"
-    echo "     https://documentation.wazuh.com"
+echo "     https://www.monitoring-solutions.com"
 
     echo ""
     echo ""
@@ -860,7 +856,7 @@ main()
     fi
 
     # Initial message
-    echo " $NAME $VERSION (Rev. $REVISION) ${installscript} - https://www.wazuh.com"
+    echo " $NAME $VERSION (Rev. $REVISION) ${installscript} - https://www.monitoring-solutions.com"
     catMsg "0x101-initial"
     echo ""
     echo "  - $system: $UNAME (${DIST_NAME} ${DIST_VER}.${DIST_SUBVER})"
@@ -1024,12 +1020,8 @@ main()
     echo " - ${configurationdone}."
     echo ""
     echo " - ${tostart}:"
-    echo "      $INSTALLDIR/bin/wazuh-control start"
-    echo ""
-    echo " - ${tostop}:"
-    echo "      $INSTALLDIR/bin/wazuh-control stop"
-    echo ""
-    echo " - ${configat} $INSTALLDIR/etc/ossec.conf"
+    echo "      $INSTALLDIR/bin/monitoring-control start"
+    echo "      $INSTALLDIR/bin/monitoring-control stop"
     echo ""
 
 
@@ -1076,24 +1068,12 @@ main()
         echo " - ${addserveragent}"
         echo ""
         echo "   ${moreinfo}"
-        echo "   https://documentation.wazuh.com/"
-        echo ""
-
-    elif [ "X$INSTYPE" = "Xagent" ]; then
+        echo "   https://www.monitoring-solutions.com/"
         echo ""
         echo " - ${moreinfo}"
-        echo "   https://documentation.wazuh.com/"
-        echo ""
-    fi
-
-    if [ "X$notmodified" = "Xyes" ]; then
+        echo "   https://www.monitoring-solutions.com/"
         catMsg "0x105-noboot"
-        echo "      $INSTALLDIR/bin/wazuh-control start"
-        echo ""
-    fi
-}
-
-_f_cfg="./install.cfg.sh"
+        echo "      $INSTALLDIR/bin/monitoring-control start"
 
 if [ -f $_f_cfg ]; then
   . $_f_cfg

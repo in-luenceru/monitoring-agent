@@ -9,7 +9,7 @@
 # $1 is the message
 # $2 is the error code
 
-DIR="/Library/Ossec"
+DIR="/Library/MonitoringAgent"
 ARCH="PACKAGE_ARCH"
 
 function check_errm
@@ -51,10 +51,6 @@ if [ -d "${DIR}" ]; then
     if ${DIR}/bin/monitoring-control status | grep "is running" > /dev/null 2>&1; then
         touch "${DIR}/MONITORING_RESTART"
         ${DIR}/bin/monitoring-control stop
-        restart="true"
-    elif ${DIR}/bin/ossec-control status | grep "is running" > /dev/null 2>&1; then
-        touch "${DIR}/MONITORING_RESTART"
-        ${DIR}/bin/ossec-control stop
         restart="true"
     fi
 

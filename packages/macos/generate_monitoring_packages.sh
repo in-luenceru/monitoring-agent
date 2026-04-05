@@ -17,7 +17,7 @@ SERVICE_PATH="/Library/LaunchDaemons/com.monitoring.agent.plist"
 STARTUP_PATH="/Library/StartupItems/MONITORING/StartupParameters.plist"
 LAUNCHER_SCRIPT_PATH="/Library/StartupItems/MONITORING/Monitoring-launcher"
 STARTUP_SCRIPT_PATH="/Library/StartupItems/MONITORING/MONITORING"
-INSTALLATION_PATH="/Library/Ossec"    # Installation path.
+INSTALLATION_PATH="/Library/MonitoringAgent"    # Installation path.
 VERSION=""                            # Default VERSION (branch/tag).
 REVISION="1"                          # Package revision.
 BRANCH_TAG=""                         # Branch that will be downloaded to build package.
@@ -112,9 +112,9 @@ function prepare_building_folder() {
 
     version="$1"
     pkg_final_name="$2"
-    build_info_file="${MONITORING_PACKAGES_PATH}/specs/build-info.json"
-    preinstall_script="${MONITORING_PACKAGES_PATH}/package_files/preinstall.sh"
-    postinstall_script="${MONITORING_PACKAGES_PATH}/package_files/postinstall.sh"
+    build_info_file="${MONITORING_PACKAGES_PATH}/specs/build-info-monitoring.json"
+    preinstall_script="${MONITORING_PACKAGES_PATH}/package_files/preinstall_monitoring.sh"
+    postinstall_script="${MONITORING_PACKAGES_PATH}/package_files/postinstall_monitoring.sh"
     packaged_directory=$CURRENT_PATH/monitoring-agent/payload
 
     if [ -d "$CURRENT_PATH/monitoring-agent" ]; then
@@ -188,7 +188,7 @@ function build_package() {
         ${CURRENT_PATH}/uninstall.sh
     fi
 
-    ${MONITORING_PACKAGES_PATH}/package_files/build.sh "${INSTALLATION_PATH}" "${MONITORING_PATH}" ${JOBS} ${DEBUG} ${MAKE_COMPILATION}
+    ${MONITORING_PACKAGES_PATH}/package_files/build_monitoring.sh "${INSTALLATION_PATH}" "${MONITORING_PATH}" ${JOBS} ${DEBUG} ${MAKE_COMPILATION}
 
     # sign the binaries and the libraries
     sign_binaries
@@ -218,6 +218,8 @@ function build_package() {
 function help() {
     set +x
     echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "  Monitoring Agent macOS Package Builder"
     echo
     echo "  Build options:"
     echo "    -a, --architecture <arch>     [Optional] Target architecture of the package [intel64/arm64]. By Default: intel64."

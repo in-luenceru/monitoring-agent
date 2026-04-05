@@ -1,8 +1,6 @@
 #!/bin/sh
 
 # Darwin init script for Monitoring Agent.
-# by Lorenzo Costanzia di Costigliole <mummie@tin.it>
-# Modified by Monitoring Solutions Inc. <support@monitoring-solutions.com>.
 # Copyright (C) 2025, Monitoring Solutions Inc.
 # This program is free software; you can redistribute it and/or modify it under the terms of GPLv2
 
@@ -13,7 +11,10 @@ LAUNCHER_SCRIPT=/Library/StartupItems/MONITORING/Monitoring-launcher
 STARTUP_SCRIPT=/Library/StartupItems/MONITORING/MONITORING
 
 launchctl unload /Library/LaunchDaemons/com.monitoring.agent.plist 2> /dev/null
+
+# Also unload legacy wazuh plist if it exists
 launchctl unload /Library/LaunchDaemons/com.wazuh.agent.plist 2> /dev/null
+
 mkdir -p /Library/StartupItems/MONITORING
 chown root:wheel /Library/StartupItems/MONITORING
 rm -f $STARTUP $STARTUP_SCRIPT $SERVICE

@@ -6,11 +6,11 @@
 # -Added some sanity checks
 # -Added routine to find the first 3 contiguous UIDs above 100,
 #  starting at 600 puts this in user space
-# -Added lines to append the ossec users to the group ossec
+# -Added lines to append the monitoring users to the group monitoring
 #  so the the list GroupMembership works properly
 GROUP="monitoring"
 USER="monitoring"
-DIR="/Library/Ossec"
+DIR="/Library/MonitoringAgent"
 INSTALLATION_SCRIPTS_DIR="${DIR}/packages_files/agent_installation_scripts"
 SCA_BASE_DIR="${INSTALLATION_SCRIPTS_DIR}/sca"
 UPGRADE_FILE_FLAG="${DIR}/MONITORING_PKG_UPGRADE"
@@ -38,7 +38,7 @@ chown -R root:${GROUP} ${DIR}/
 chown -R root:wheel ${DIR}/bin
 chown -R root:wheel ${DIR}/lib
 
-# To the ossec queue (default for agentd to read)
+# To the queue (default for agentd to read)
 chown -R ${USER}:${GROUP} ${DIR}/queue/{alerts,diff,sockets,rids}
 
 chmod -R 770 ${DIR}/queue/{alerts,sockets}
@@ -62,7 +62,7 @@ chown root:${GROUP} ${DIR}/etc/local_internal_options.conf
 chmod 640 ${DIR}/etc/client.keys
 chown root:${GROUP} ${DIR}/etc/client.keys
 chmod 640 ${DIR}/etc/localtime
-chmod 770 ${DIR}/etc/shared # ossec must be able to write to it
+chmod 770 ${DIR}/etc/shared
 chown -R root:${GROUP} ${DIR}/etc/shared
 find ${DIR}/etc/shared/ -type f -exec chmod 660 {} \;
 chown root:${GROUP} ${DIR}/etc/ossec.conf
@@ -155,18 +155,32 @@ fi
 echo "Removing temporary files..."
 rm -rf ${DIR}/packages_files
 
-# Remove old ossec user and group if exists and change ownwership of files
-if [[ $(dscl . -read /Groups/ossec) ]]; then
-    echo "Changing group from Ossec to Monitoring"
-    find ${DIR}/ -group ossec -user root -exec chown root:monitoring {} \ > /dev/null 2>&1 || true
-    if [[ $(dscl . -read /Users/ossec) ]]; then
-        echo "Changing user from Ossec to Monitoring"
-        find ${DIR}/ -group ossec -user ossec -exec chown monitoring:monitoring {} \ > /dev/null 2>&1 || true
-        echo "Removing Ossec user"
+# Remove old ossec user and group if exists and change ownership of files
+if [[ $(dscl . -read /Groups/ossec 2>/dev/null) ]]; then
+    echo "Changing group from ossec to monitoring"
+    find ${DIR}/ -group ossec -user root -exec chown root:monitoring {} \; > /dev/null 2>&1 || true
+    if [[ $(dscl . -read /Users/ossec 2>/dev/null) ]]; then
+        echo "Changing user from ossec to monitoring"
+        find ${DIR}/ -group ossec -user ossec -exec chown monitoring:monitoring {} \; > /dev/null 2>&1 || true
+        echo "Removing ossec user"
         sudo /usr/bin/dscl . -delete "/Users/ossec"
     fi
-    echo "Removing Ossec group"
+    echo "Removing ossec group"
     sudo /usr/bin/dscl . -delete "/Groups/ossec"
+fi
+
+# Remove old wazuh user and group if exists and change ownership of files
+if [[ $(dscl . -read /Groups/wazuh 2>/dev/null) ]]; then
+    echo "Changing group from wazuh to monitoring"
+    find ${DIR}/ -group wazuh -user root -exec chown root:monitoring {} \; > /dev/null 2>&1 || true
+    if [[ $(dscl . -read /Users/wazuh 2>/dev/null) ]]; then
+        echo "Changing user from wazuh to monitoring"
+        find ${DIR}/ -group wazuh -user wazuh -exec chown monitoring:monitoring {} \; > /dev/null 2>&1 || true
+        echo "Removing wazuh user"
+        sudo /usr/bin/dscl . -delete "/Users/wazuh"
+    fi
+    echo "Removing wazuh group"
+    sudo /usr/bin/dscl . -delete "/Groups/wazuh"
 fi
 
 # Remove 4.1.5 patch

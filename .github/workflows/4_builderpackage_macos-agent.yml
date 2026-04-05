@@ -27,7 +27,7 @@ on:
 
       is_stage:
         description: |
-          Use release-style package name (wazuh-agent-<ver>-<rev>.<arch>).
+          Use release-style package name (monitoring-agent-<ver>-<rev>.<arch>).
           By default: false (a short git hash is appended instead).
         type: boolean
         default: false
@@ -70,7 +70,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          # munkipkg is needed by generate_wazuh_packages.sh
+          # munkipkg is needed by generate_monitoring_packages.sh
           git clone --depth=1 https://github.com/munki/munki-pkg.git ~/Developer/munki-pkg
           sudo mkdir -p /usr/local/bin
           sudo ln -sf "$HOME/Developer/munki-pkg/munkipkg" /usr/local/bin/munkipkg
@@ -89,7 +89,7 @@ jobs:
       - name: Build macOS monitoring-agent package
         run: |
           cd packages/macos
-          sudo bash generate_wazuh_packages.sh \
+          sudo bash generate_monitoring_packages.sh \
             -a intel64 \
             -j ${{ inputs.jobs }} \
             -r "${{ inputs.revision }}" \
@@ -134,7 +134,7 @@ jobs:
       - name: Build macOS monitoring-agent package
         run: |
           cd packages/macos
-          sudo bash generate_wazuh_packages.sh \
+          sudo bash generate_monitoring_packages.sh \
             -a arm64 \
             -j ${{ inputs.jobs }} \
             -r "${{ inputs.revision }}" \

@@ -1,4 +1,4 @@
-/* Copyright (C) 2015, Wazuh Inc.
+/* Copyright (C) 2025, Monitoring Solutions Inc.
  * Copyright (C) 2009-2012 Trend Micro Inc.
  * All rights reserved.
  *
@@ -97,7 +97,7 @@ https://www.gnu.org/licenses/gpl.html\n"
 
 /* User Configuration */
 #ifndef USER
-#define USER            "wazuh"
+#define USER            "monitoring"
 #endif
 
 #ifndef ROOTUSER
@@ -105,7 +105,7 @@ https://www.gnu.org/licenses/gpl.html\n"
 #endif
 
 #ifndef GROUPGLOBAL
-#define GROUPGLOBAL     "wazuh"
+#define GROUPGLOBAL     "monitoring"
 #endif
 
 // Standard super user UID and GID
@@ -113,7 +113,7 @@ https://www.gnu.org/licenses/gpl.html\n"
 
 #define ROOT_GID (0)
 
-// Wazuh home environment variable
+// Monitoring Agent home environment variable
 #define WAZUH_HOME_ENV  "WAZUH_HOME"
 
 /* Default queue */
