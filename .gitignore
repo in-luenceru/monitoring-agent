@@ -33,3 +33,17 @@ tmp/*
 !queue/rids/.gitkeep
 # Ensure client keys file isn't committed
 etc/client.keys
+
+# Large binary artifacts – too big for GitHub (>100 MB)
+monitoring_agent.zip
+*.msi
+*.cld
+*.cvd
+src/win32/agent/agent.zip
+src/win32/agent/RiskNoX-*.exe
+src/win32/monitoring-suite-*.exe
+src/suricatamonitoring/suricatamonitoring.zip
+src/suricatamonitoring/suricata/bin/suricata.exe
+src/win32/suricata/bin/suricata.exe
+src/win32/agent/suricata/bin/suricata.exe
+src/win32/agent/suricata/log/eve.json
