@@ -1,0 +1,6 @@
+{
+  "backend_port": 5000,
+  "agent_api_key": "agent-secure-key-xyz123",
+  "manager_url": "https://testingmanagerapi-production.up.railway.app",
+  "poll_interval": 30
+}

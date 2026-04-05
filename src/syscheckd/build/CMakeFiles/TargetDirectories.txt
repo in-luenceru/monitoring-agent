@@ -1,0 +1,13 @@
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/CMakeFiles/wazuh-syscheckd-event.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/CMakeFiles/test.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/CMakeFiles/edit_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/CMakeFiles/rebuild_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/CMakeFiles/fimdb.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/CMakeFiles/test.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/CMakeFiles/edit_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/CMakeFiles/rebuild_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/testtool/CMakeFiles/fimdb_test_tool.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/testtool/CMakeFiles/test.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/testtool/CMakeFiles/edit_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build/src/db/testtool/CMakeFiles/rebuild_cache.dir

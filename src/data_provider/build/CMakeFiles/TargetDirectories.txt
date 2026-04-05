@@ -1,0 +1,8 @@
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/CMakeFiles/sysinfo.dir
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/CMakeFiles/test.dir
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/CMakeFiles/edit_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/CMakeFiles/rebuild_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/testtool/CMakeFiles/sysinfo_test_tool.dir
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/testtool/CMakeFiles/test.dir
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/testtool/CMakeFiles/edit_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/data_provider/build/testtool/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,57 @@
+EXPORTS
+    _ZN2DB10removeFileERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE @1
+    _ZN2DB10searchFileERKSt5tupleIJ16FILE_SEARCH_TYPENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_EESt8functionIFvRKS7_EE @2
+    _ZN2DB10updateFileERKN8nlohmann16json_abi_v3_11_210basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbxydSaNS1_14adl_serializerES4_IhSaIhEEEEP21create_json_event_ctxSt8functionIFvSE_EE @3
+    _ZN2DB11pushMessageERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE @4
+    _ZN2DB12DBSyncHandleEv @5
+    _ZN2DB12countEntriesERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE17COUNT_SELECT_TYPE @6
+    _ZN2DB12runIntegrityEv @7
+    _ZN2DB15createJsonEventERKN8nlohmann16json_abi_v3_11_210basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbxydSaNS1_14adl_serializerES4_IhSaIhEEEESG_18ReturnTypeCallbackP21create_json_event_ctx @8
+    _ZN2DB4initEiijjSt8functionIFvRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESA_S0_IFv19modules_log_level_tS8_EEiibii @9
+    _ZN2DB7getFileERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFvRKN8nlohmann16json_abi_v3_11_210basic_jsonISt3mapSt6vectorS5_bxydSaNSA_14adl_serializerESD_IhSaIhEEEEEE @10
+    _ZN2DB8teardownEv @11
+    _ZTI10RemoteSync @12 DATA
+    _ZTI11DeleteQuery @13 DATA
+    _ZTI11InsertQuery @14 DATA
+    _ZTI11SelectQuery @15 DATA
+    _ZTI12SyncRowQuery @16 DATA
+    _ZTI13ConfigurationI21RegisterConfigurationE @17 DATA
+    _ZTI13ConfigurationI22StartSyncConfigurationE @18 DATA
+    _ZTI14QueryParameter @19 DATA
+    _ZTI21RegisterConfiguration @20 DATA
+    _ZTI22StartSyncConfiguration @21 DATA
+    _ZTI5QueryI11DeleteQueryE @22 DATA
+    _ZTI5QueryI11InsertQueryE @23 DATA
+    _ZTI5QueryI11SelectQueryE @24 DATA
+    _ZTI5QueryI12SyncRowQueryE @25 DATA
+    _ZTI6DBSync @26 DATA
+    _ZTI9DBSyncTxn @27 DATA
+    _ZTV11DeleteQuery @28 DATA
+    _ZTV11InsertQuery @29 DATA
+    _ZTV11SelectQuery @30 DATA
+    _ZTV12SyncRowQuery @31 DATA
+    _ZTV13ConfigurationI21RegisterConfigurationE @32 DATA
+    _ZTV13ConfigurationI22StartSyncConfigurationE @33 DATA
+    _ZTV14QueryParameter @34 DATA
+    _ZTV21RegisterConfiguration @35 DATA
+    _ZTV22StartSyncConfiguration @36 DATA
+    _ZTV5QueryI11DeleteQueryE @37 DATA
+    _ZTV5QueryI11InsertQueryE @38 DATA
+    _ZTV5QueryI11SelectQueryE @39 DATA
+    _ZTV5QueryI12SyncRowQueryE @40 DATA
+    fim_db_file_inode_search @41
+    fim_db_file_pattern_search @42
+    fim_db_file_update @43
+    fim_db_get_count_file_entry @44
+    fim_db_get_count_file_inode @45
+    fim_db_get_count_registry_data @46
+    fim_db_get_count_registry_key @47
+    fim_db_get_path @48
+    fim_db_init @49
+    fim_db_remove_path @50
+    fim_db_teardown @51
+    fim_db_transaction_deleted_rows @52
+    fim_db_transaction_start @53
+    fim_db_transaction_sync_row @54
+    fim_run_integrity @55
+    fim_sync_push_msg @56

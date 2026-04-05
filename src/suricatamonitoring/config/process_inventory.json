@@ -1,0 +1,58 @@
+[
+  {
+    "name": "backend_server",
+    "type": "python",
+    "path": "backend_server.py",
+    "cmdline": [".venv\\Scripts\\python.exe", "backend_server.py"],
+    "cwd": ".",
+    "env_keys": [],
+    "autostart": true,
+    "notes": "RiskNoX Security Agent Backend API Server - Flask app on port 5000",
+    "port": 5000,
+    "dependencies": []
+  },
+  {
+    "name": "agent_poll",
+    "type": "python",
+    "path": "agent_poll.py",
+    "cmdline": [".venv\\Scripts\\python.exe", "agent_poll.py"],
+    "cwd": ".",
+    "env_keys": [],
+    "autostart": true,
+    "notes": "RiskNoX Agent Polling Service - Communicates with manager and local backend",
+    "dependencies": ["backend_server"]
+  },
+  {
+    "name": "monitoring_agent",
+    "type": "exe",
+    "path": "monitoring-agent.exe",
+    "cmdline": ["monitoring-agent.exe"],
+    "cwd": ".",
+    "env_keys": [],
+    "autostart": true,
+    "notes": "Wazuh-based monitoring agent - Main security monitoring executable",
+    "dependencies": []
+  },
+  {
+    "name": "suricata_ids",
+    "type": "exe",
+    "path": "suricata\\bin\\suricata.exe",
+    "cmdline": ["suricata\\bin\\suricata.exe", "-c", "suricata\\etc\\suricata.yaml", "-i", "{NETWORK_INTERFACE}", "--pidfile", "state\\suricata.pid"],
+    "cwd": ".",
+    "env_keys": ["NETWORK_INTERFACE"],
+    "autostart": true,
+    "notes": "Suricata Network IDS - Requires network interface detection",
+    "dependencies": []
+  },
+  {
+    "name": "clamd",
+    "type": "exe",
+    "path": "vendor\\clamd.exe",
+    "cmdline": ["vendor\\clamd.exe", "--config-file=vendor\\clamd.conf"],
+    "cwd": ".",
+    "env_keys": [],
+    "autostart": false,
+    "notes": "ClamAV Daemon - Optional antivirus daemon (on-demand scanning available via backend)",
+    "dependencies": []
+  }
+]

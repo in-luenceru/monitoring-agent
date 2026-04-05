@@ -1,0 +1,3 @@
+/usr/bin/cmake -E rm -f CMakeFiles/sysinfo.dir/objects.a
+/usr/bin/i686-w64-mingw32-ar qc CMakeFiles/sysinfo.dir/objects.a @CMakeFiles/sysinfo.dir/objects1
+/usr/bin/i686-w64-mingw32-g++-posix -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Woverloaded-virtual -Wunused -Wcast-align -Wformat=2 -O2 -g -DNDEBUG -Wl,--add-stdcall-alias -shared -o bin/sysinfo.dll -Wl,--out-implib,lib/libsysinfo.dll.a -Wl,--major-image-version,0,--minor-image-version,0 -Wl,--whole-archive CMakeFiles/sysinfo.dir/objects.a -Wl,--no-whole-archive @CMakeFiles/sysinfo.dir/linkLibs.rsp

@@ -1,0 +1,40 @@
+# Log files
+*.log
+logs/
+
+# Temporary and backup files
+*.tmp
+*.temp
+
+# Process ID files
+*.pid
+
+# State files
+*.state
+
+
+# Agent keys (sensitive)
+client.keys
+client.keys.*
+
+# Queue data
+queue/
+
+# Runtime identification files
+rids/
+
+# Monitoring agent executable files
+monitoring-agent.pid
+monitoring-agent.state
+wazuh-agent.state
+monitoring-logcollector.state
+
+# Wait files
+.wait
+
+# Test output
+test_output.log
+test_results.*
+
+# Watchdog logs
+watchdog.log

@@ -1,0 +1,52 @@
+Unified Security Agent License
+================================
+
+Copyright (c) 2025 RiskNoX Security
+
+This software package includes:
+- monitoring Monitoring Agent (GPL v2)
+- Suricata Network IDS (GPL v2)
+- RiskNoX Supervisor Service (Proprietary)
+
+By installing this software, you agree to the terms and conditions
+of the respective licenses for each component.
+
+monitoring MONITORING AGENT LICENSE
+===============================
+This component is licensed under the GNU General Public License v2.0.
+You may obtain a copy of the license at:
+https://www.gnu.org/licenses/gpl-2.0.html
+
+SURICATA NETWORK IDS LICENSE
+=============================
+This component is licensed under the GNU General Public License v2.0.
+You may obtain a copy of the license at:
+https://www.gnu.org/licenses/gpl-2.0.html
+
+RISKNOX SUPERVISOR SERVICE
+===========================
+The RiskNoX Supervisor Service is proprietary software owned by RiskNoX Security.
+
+DISCLAIMER
+===========
+This software is provided 'as is' without warranty of any kind, either express
+or implied, including but not limited to the implied warranties of merchantability
+and fitness for a particular purpose. In no event shall the authors or copyright
+holders be liable for any claim, damages or other liability, whether in an action
+of contract, tort or otherwise, arising from, out of or in connection with the
+software or the use or other dealings in the software.
+
+SYSTEM REQUIREMENTS
+====================
+- Windows 10 or later (64-bit)
+- Administrator privileges for installation
+- 2GB free disk space
+- Internet connection for updates
+- Network interface for Suricata monitoring
+- PowerShell 5.1+ (PowerShell 7 recommended)
+
+SUPPORT
+========
+For support and documentation, visit: https://risknox.com
+
+Installation and usage of this software indicates acceptance of these terms.

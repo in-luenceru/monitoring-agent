@@ -1,0 +1,114 @@
+<!--
+  -  Clamav and Freshclam decoders
+  -  Author: Daniel Cid.
+  -  Updated by Wazuh, Inc.
+  -  Copyright (C) 2015, Wazuh Inc.
+  -  Copyright (C) 2009 Trend Micro Inc.
+  -  This program is a free software; you can redistribute it and/or modify it under the terms of GPLv2.
+-->
+
+
+<!--
+  -  Nov  5 22:59:19 ix freshclam[32349]: Incremental update failed, trying to download daily.cvd
+-->
+<decoder name="clamd">
+  <program_name>^clamd</program_name>
+</decoder>
+
+<!--
+Nov 18 16:51:04 hostname clamd[511]: /usr/share/clamav-testfiles/clam.arj: ClamAV-Test-File(f58327b03afd2a727c3329ba3c0947a7:393) FOUND
+       url: '/usr/share/clamav-testfiles/clam.arj'
+       extra_data: 'ClamAV-Test-File'
+       id: 'f58327b03afd2a727c3329ba3c0947a7'
+-->
+<decoder name="clamd-found">
+  <parent>clamd</parent>
+   <prematch>FOUND</prematch>
+   <regex>(\S+):\s+(\S+)\((\S+):</regex>
+   <order>url, extra_data, id</order>
+</decoder>
+
+<decoder name="freshclam">
+  <program_name>^freshclam</program_name>
+</decoder>
+
+<!-- Windows ClamAV Log Decoders -->
+<!-- Log format: [YYYY-MM-DD HH:MM:SS] [LEVEL] Message -->
+<decoder name="clamav-windows">
+  <prematch>^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[</prematch>
+</decoder>
+
+<decoder name="clamav-windows-info">
+  <parent>clamav-windows</parent>
+  <regex>^\[(\S+ \S+)\] \[INFO\] (.+)</regex>
+  <order>timestamp, message</order>
+</decoder>
+
+<decoder name="clamav-windows-warning">
+  <parent>clamav-windows</parent>
+  <regex>^\[(\S+ \S+)\] \[WARNING\] (.+)</regex>
+  <order>timestamp, message</order>
+</decoder>
+
+<decoder name="clamav-windows-error">
+  <parent>clamav-windows</parent>
+  <regex>^\[(\S+ \S+)\] \[ERROR\] (.+)</regex>
+  <order>timestamp, message</order>
+</decoder>
+
+<!-- Windows ClamAV Scan Start -->
+<decoder name="clamav-windows-scan-start">
+  <parent>clamav-windows</parent>
+  <prematch>Scan initiated|Starting</prematch>
+  <regex>^\[(\S+ \S+)\] \[(\w+)\] (\w+) Scan (initiated|Starting)</regex>
+  <order>timestamp, level, scan_type, action</order>
+</decoder>
+
+<!-- Windows ClamAV Scan Complete -->
+<decoder name="clamav-windows-scan-complete">
+  <parent>clamav-windows</parent>
+  <prematch>Scan completed|completed successfully</prematch>
+  <regex>^\[(\S+ \S+)\] \[(\w+)\] (.+) completed</regex>
+  <order>timestamp, level, scan_type</order>
+</decoder>
+
+<!-- Windows ClamAV Threat Detected -->
+<decoder name="clamav-windows-threat">
+  <parent>clamav-windows</parent>
+  <prematch>Threats detected|threats detected</prematch>
+  <regex>^\[(\S+ \S+)\] \[(\w+)\] (.+) - (\d+) threats</regex>
+  <order>timestamp, level, message, threat_count</order>
+</decoder>
+
+<!-- Windows ClamAV Database Update -->
+<decoder name="clamav-windows-update">
+  <parent>clamav-windows</parent>
+  <prematch>Database update|updated successfully</prematch>
+  <regex>^\[(\S+ \S+)\] \[(\w+)\] Database (.+)</regex>
+  <order>timestamp, level, status</order>
+</decoder>
+
+<!-- Direct clamscan output decoder (raw format from --log option) -->
+<!-- Format: filepath: VirusName FOUND -->
+<decoder name="clamscan-direct">
+  <prematch> FOUND$</prematch>
+</decoder>
+
+<decoder name="clamscan-direct-found">
+  <parent>clamscan-direct</parent>
+  <regex>^(.+): (.+) FOUND$</regex>
+  <order>url, extra_data</order>
+</decoder>
+
+<!-- Direct clamscan scan summary -->
+<decoder name="clamscan-summary">
+  <prematch>^----------- SCAN SUMMARY -----------</prematch>
+</decoder>
+
+<decoder name="clamscan-infected">
+  <prematch>^Infected files:</prematch>
+  <regex>^Infected files:\s*(\d+)</regex>
+  <order>infected_count</order>
+</decoder>
+
+

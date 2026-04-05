@@ -1,0 +1,16 @@
+[2025-12-04 16:46:29] [SURICATA] [ERROR] Error checking Suricata status: The term 'Get-CimInstance' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-12-04 16:47:25] [SURICATA] [ERROR] Error checking Suricata status: The term 'Get-CimInstance' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-12-04 16:48:48] [SURICATA] [INFO] Stopping Suricata Network IDS...
+[2025-12-04 16:48:48] [SURICATA] [ERROR] Error checking Suricata status: The term 'Get-CimInstance' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-12-04 16:48:48] [SURICATA] [WARN] Suricata is not running
+[2025-12-04 16:48:54] [SURICATA] [INFO] Starting Suricata Network IDS...
+[2025-12-04 16:48:54] [SURICATA] [ERROR] Error checking Suricata status: The term 'Get-CimInstance' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-12-04 16:48:54] [SURICATA] [WARN] Error detecting network interfaces: The term 'Get-NetAdapter' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-12-04 16:48:54] [SURICATA] [INFO] Using network interface: a
+[2025-12-04 16:48:54] [SURICATA] [INFO] Starting Suricata from workspace: /home/anandhu/Desktop/monitoring_agent/src/suricatamonitoring/suricata/bin/suricata.exe
+[2025-12-04 16:48:54] [SURICATA] [ERROR] Required npcap file missing: /home/anandhu/Desktop/monitoring_agent/src/suricatamonitoring/npcap/wpcap.dll

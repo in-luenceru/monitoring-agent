@@ -1,0 +1,199 @@
+<!--
+  -  Clam AV rules
+  -  Author: Daniel Cid.
+  -  Updated by Wazuh, Inc.
+  -  Copyright (C) 2015, Wazuh Inc.
+  -  Copyright (C) 2009 Trend Micro Inc.
+  -  This program is a free software; you can redistribute it and/or modify it under the terms of GPLv2.
+-->
+
+<group name="clamd,freshclam,">
+
+  <rule id="52500" level="0" noalert="1">
+    <decoded_as>clamd</decoded_as>
+    <description>Clamd messages grouped.</description>
+  </rule>
+
+  <rule id="52501" level="0" noalert="1">
+    <decoded_as>freshclam</decoded_as>
+    <description>ClamAV: database update</description>
+  </rule>
+
+  <rule id="52502" level="8">
+    <if_sid>52500</if_sid>
+    <match>FOUND</match>
+    <description>ClamAV: Virus detected</description>
+    <group>virus,pci_dss_5.1,pci_dss_5.2,pci_dss_11.4,gpg13_4.2,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_A1.2,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="52503" level="10">
+    <if_sid>52500</if_sid>
+    <match>^ERROR: </match>
+    <description>Clamd error</description>
+    <group>virus,gpg13_4.3,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <rule id="52504" level="7">
+    <if_sid>52500</if_sid>
+    <match>^WARNING: </match>
+    <description>Clamd warning</description>
+    <group>virus,gpg13_4.12,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <rule id="52505" level="3">
+    <if_sid>52500</if_sid>
+    <match>clamd daemon</match>
+    <description>Clamd restarted</description>
+    <group>virus,gpg13_4.14,</group>
+  </rule>
+
+  <rule id="52506" level="3">
+    <if_sid>52500</if_sid>
+    <match>Database modification detected</match>
+    <description>Clamd database updated</description>
+    <group>virus,pci_dss_5.2,gpg13_4.4,gdpr_IV_35.7.d,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <rule id="52507" level="3">
+    <if_sid>52501</if_sid>
+    <match>ClamAV update process started </match>
+    <description>ClamAV database update</description>
+    <group>virus,pci_dss_5.2,gpg13_4.4,gdpr_IV_35.7.d,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <rule id="52508" level="3">
+    <if_sid>52501</if_sid>
+    <match>Database updated </match>
+    <description>ClamAV database updated</description>
+    <group>virus,pci_dss_5.2,gpg13_4.4,gdpr_IV_35.7.d,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <rule id="52509" level="0">
+    <if_sid>52501</if_sid>
+    <match>Incremental update failed|Error while reading database from|Update failed.</match>
+    <description>ClamAV: Could not download the incremental virus definition updates.</description>
+    <group>pci_dss_5.2,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_A1.2,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="52510" level="6">
+    <if_sid>52500</if_sid>
+    <match>stop|Stop</match>
+    <description>Clamd stopped</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>virus,pci_dss_5.1,gpg13_4.14,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <rule id="52511" level="10" frequency="8">
+    <if_matched_sid>52502</if_matched_sid>
+    <same_id />
+    <description>ClamAV: Virus detected multiple times</description>
+    <group>virus,pci_dss_5.1,pci_dss_5.2,pci_dss_11.4,gpg13_4.2,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_A1.2,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>
+
+<!-- Windows ClamAV Rules Group -->
+<group name="clamav-windows,">
+
+  <!-- Base rule for Windows ClamAV logs -->
+  <rule id="52520" level="0" noalert="1">
+    <decoded_as>clamav-windows</decoded_as>
+    <description>Windows ClamAV messages grouped.</description>
+  </rule>
+
+  <!-- Windows ClamAV Scan Started -->
+  <rule id="52521" level="3">
+    <if_sid>52520</if_sid>
+    <match>Scan initiated|initiated</match>
+    <description>Windows ClamAV: Scan started</description>
+    <group>virus,pci_dss_5.2,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <!-- Windows ClamAV Scan Completed -->
+  <rule id="52522" level="3">
+    <if_sid>52520</if_sid>
+    <match>Scan completed|completed successfully</match>
+    <description>Windows ClamAV: Scan completed</description>
+    <group>virus,pci_dss_5.2,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <!-- Windows ClamAV Threat Detected -->
+  <rule id="52523" level="8">
+    <if_sid>52520</if_sid>
+    <match>threats detected|Threats detected</match>
+    <description>Windows ClamAV: Virus detected during scan</description>
+    <group>virus,pci_dss_5.1,pci_dss_5.2,pci_dss_11.4,gpg13_4.2,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_A1.2,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Windows ClamAV Error -->
+  <rule id="52524" level="10">
+    <if_sid>52520</if_sid>
+    <match>\[ERROR\]</match>
+    <description>Windows ClamAV: Error occurred</description>
+    <group>virus,gpg13_4.3,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- Windows ClamAV Warning -->
+  <rule id="52525" level="7">
+    <if_sid>52520</if_sid>
+    <match>\[WARNING\]</match>
+    <description>Windows ClamAV: Warning</description>
+    <group>virus,gpg13_4.12,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- Windows ClamAV Database Updated -->
+  <rule id="52526" level="3">
+    <if_sid>52520</if_sid>
+    <match>Database updated successfully|updated successfully</match>
+    <description>Windows ClamAV: Database updated</description>
+    <group>virus,pci_dss_5.2,gpg13_4.4,gdpr_IV_35.7.d,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <!-- Windows ClamAV Scan Failed -->
+  <rule id="52527" level="6">
+    <if_sid>52520</if_sid>
+    <match>Scan failed</match>
+    <description>Windows ClamAV: Scan failed</description>
+    <group>virus,pci_dss_5.1,gpg13_4.3,nist_800_53_SI.3,tsc_A1.2,</group>
+  </rule>
+
+  <!-- Windows ClamAV Multiple Threats -->
+  <rule id="52528" level="10" frequency="4">
+    <if_matched_sid>52523</if_matched_sid>
+    <same_source_ip />
+    <description>Windows ClamAV: Multiple virus detections</description>
+    <group>virus,pci_dss_5.1,pci_dss_5.2,pci_dss_11.4,gpg13_4.2,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_A1.2,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>
+
+<!-- Direct clamscan output rules (for native --log format) -->
+<group name="clamscan,">
+
+  <!-- Base rule for direct clamscan output -->
+  <rule id="52530" level="0" noalert="1">
+    <decoded_as>clamscan-direct</decoded_as>
+    <description>Direct clamscan output.</description>
+  </rule>
+
+  <!-- Direct clamscan virus detection -->
+  <rule id="52531" level="8">
+    <if_sid>52530</if_sid>
+    <match>FOUND</match>
+    <description>ClamAV: Virus detected - $(url): $(extra_data)</description>
+    <group>virus,pci_dss_5.1,pci_dss_5.2,pci_dss_11.4,gpg13_4.2,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_A1.2,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Multiple virus detections from direct clamscan -->
+  <rule id="52532" level="10" frequency="5">
+    <if_matched_sid>52531</if_matched_sid>
+    <description>ClamAV: Multiple virus detections</description>
+    <group>virus,pci_dss_5.1,pci_dss_5.2,pci_dss_11.4,gpg13_4.2,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_A1.2,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>
+
+
+

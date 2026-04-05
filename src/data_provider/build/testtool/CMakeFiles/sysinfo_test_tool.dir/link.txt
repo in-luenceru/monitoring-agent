@@ -1,0 +1,3 @@
+/usr/bin/cmake -E rm -f CMakeFiles/sysinfo_test_tool.dir/objects.a
+/usr/bin/i686-w64-mingw32-ar qc CMakeFiles/sysinfo_test_tool.dir/objects.a @CMakeFiles/sysinfo_test_tool.dir/objects1
+/usr/bin/i686-w64-mingw32-g++-posix -g -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Woverloaded-virtual -Wunused -Wcast-align -Wformat=2 -std=c++14 -O2 -g -DNDEBUG -Wl,--whole-archive CMakeFiles/sysinfo_test_tool.dir/objects.a -Wl,--no-whole-archive -o ../bin/sysinfo_test_tool.exe -Wl,--out-implib,../lib/libsysinfo_test_tool.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/sysinfo_test_tool.dir/linkLibs.rsp

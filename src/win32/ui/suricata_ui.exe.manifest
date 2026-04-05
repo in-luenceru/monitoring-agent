@@ -1,0 +1,12 @@
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+ <description>Suricata Manager UI</description>
+ <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+   <security>
+     <requestedPrivileges>
+       <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+     </requestedPrivileges>
+   </security>
+ </trustInfo>
+ <file name="comctl32.dll" loadFrom="%windir%\System32\comctl32.dll"></file>
+ <file name="advapi32.dll" loadFrom="%windir%\System32\advapi32.dll"></file>
+</assembly>

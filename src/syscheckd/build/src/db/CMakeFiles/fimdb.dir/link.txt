@@ -1,0 +1,3 @@
+/usr/bin/cmake -E rm -f CMakeFiles/fimdb.dir/objects.a
+/usr/bin/i686-w64-mingw32-ar qc CMakeFiles/fimdb.dir/objects.a @CMakeFiles/fimdb.dir/objects1
+/usr/bin/i686-w64-mingw32-g++-posix -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Woverloaded-virtual -Wunused -Wcast-align -Wformat=2 -std=c++14 -pthread -O2 -g -DNDEBUG -Wl,--add-stdcall-alias -Wl,--output-def,libfimdb.def -shared -o ../../bin/libfimdb.dll -Wl,--out-implib,../../lib/libfimdb.dll.a -Wl,--major-image-version,0,--minor-image-version,0 -Wl,--whole-archive CMakeFiles/fimdb.dir/objects.a -Wl,--no-whole-archive @CMakeFiles/fimdb.dir/linkLibs.rsp

@@ -1,0 +1,104 @@
+make libwazuhext.lib CFLAGS="-DCLIENT -D_POSIX_C_SOURCE -DWIN32 -DPSAPI_VERSION=1" LIBS="-lwsock32 -lws2_32 -lcrypt32"
+make[1]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src'
+make[1]: 'libwazuhext.lib' is up to date.
+make[1]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src'
+make win32/syscollector win32/syscheck CFLAGS="-DCLIENT -D_POSIX_C_SOURCE -DWIN32 -DPSAPI_VERSION=1"
+make[1]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src'
+cd shared_modules/dbsync/ && mkdir -p build && cd build && cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix -DCMAKE_SYMBOLS_IN_RELEASE=ON   -DRESOURCE_OBJ=win32/version-dll.o .. && make
+cd data_provider/ && mkdir -p build && cd build && cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix -DCMAKE_SYMBOLS_IN_RELEASE=ON    -DRESOURCE_OBJ=win32/version-dll.o .. && make
+-- Configuring done
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/anandhu/Desktop/monitoring_agent/src/data_provider/build
+-- Generating done
+-- Build files have been written to: /home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build
+make[2]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+make[2]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+make[3]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+make[3]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+[ 60%] Built target dbsync
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+[ 77%] Built target sysinfo
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+[ 80%] Built target dbsync_example
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+[100%] Built target sysinfo_test_tool
+make[3]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+make[2]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/data_provider/build'
+[100%] Built target dbsync_test_tool
+make[3]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+make[2]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/dbsync/build'
+cd shared_modules/rsync/ &&  mkdir -p build && cd build && cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix -DCMAKE_SYMBOLS_IN_RELEASE=ON   -DRESOURCE_OBJ=win32/version-dll.o .. && make
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build
+make[2]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+make[3]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+[ 37%] Built target rsync
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+[100%] Built target rsync_test_tool
+make[3]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+make[2]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/shared_modules/rsync/build'
+cd wazuh_modules/syscollector/ && mkdir -p build && cd build && cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix -DCMAKE_SYMBOLS_IN_RELEASE=ON   -DRESOURCE_OBJ=win32/version-dll.o .. && make
+cd syscheckd/ && mkdir -p build && cd build && cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix -DCMAKE_SYMBOLS_IN_RELEASE=ON   -DRESOURCE_OBJ=win32/version-dll.o .. && make
+-- Configuring done
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/anandhu/Desktop/monitoring_agent/src/syscheckd/build
+-- Generating done
+make[2]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+-- Build files have been written to: /home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build
+make[2]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+make[3]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+make[3]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+[ 66%] Built target syscollector
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+[ 20%] Built target fimdb
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+[100%] Built target syscollector_test_tool
+make[3]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+make[2]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build'
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+[ 58%] Built target wazuh-syscheckd-event
+make[4]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+[ 62%] Built target fimdb_test_tool
+make[4]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+[100%] Built target wazuh-syscheckd
+make[3]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+make[2]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src/syscheckd/build'
+make[1]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src'
+make win32/monitoring-agent.exe win32/monitoring-agent-eventchannel.exe win32/manage_agents.exe win32/setup-windows.exe win32/setup-syscheck.exe win32/setup-iis.exe win32/os_win32ui.exe win32/agent-auth.exe CFLAGS="-DCLIENT -D_POSIX_C_SOURCE -DWIN32 -DPSAPI_VERSION=1" LIBS="-lwsock32 -lwevtapi -lshlwapi -lcomctl32 -ladvapi32 -lkernel32 -lpsapi -lgdi32 -liphlpapi -lws2_32 -lcrypt32 -lwintrust -lmpr"
+make[1]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src'
+make[1]: 'win32/monitoring-agent.exe' is up to date.
+make[1]: 'win32/monitoring-agent-eventchannel.exe' is up to date.
+make[1]: 'win32/manage_agents.exe' is up to date.
+make[1]: 'win32/setup-windows.exe' is up to date.
+make[1]: 'win32/setup-syscheck.exe' is up to date.
+make[1]: 'win32/setup-iis.exe' is up to date.
+make[1]: 'win32/os_win32ui.exe' is up to date.
+make[1]: 'win32/agent-auth.exe' is up to date.
+make[1]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src'
+make win32/restart-wazuh.exe win32/route-null.exe win32/netsh.exe CFLAGS="-DCLIENT -D_POSIX_C_SOURCE -DWIN32 -DPSAPI_VERSION=1" LIBS="-lwsock32 -lwevtapi -lshlwapi -lcomctl32 -ladvapi32 -lkernel32 -lpsapi -lgdi32 -liphlpapi -lws2_32 -lcrypt32 -lwintrust -lmpr"
+make[1]: Entering directory '/home/anandhu/Desktop/monitoring_agent/src'
+make[1]: 'win32/restart-wazuh.exe' is up to date.
+make[1]: 'win32/route-null.exe' is up to date.
+make[1]: 'win32/netsh.exe' is up to date.
+make[1]: Leaving directory '/home/anandhu/Desktop/monitoring_agent/src'
+cd win32/ && ./unix2dos.pl ossec.conf > default-ossec.conf

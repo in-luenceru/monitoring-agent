@@ -1,0 +1,8 @@
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/CMakeFiles/syscollector.dir
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/CMakeFiles/test.dir
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/CMakeFiles/edit_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/CMakeFiles/rebuild_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/testtool/CMakeFiles/syscollector_test_tool.dir
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/testtool/CMakeFiles/test.dir
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/testtool/CMakeFiles/edit_cache.dir
+/home/anandhu/Desktop/monitoring_agent/src/wazuh_modules/syscollector/build/testtool/CMakeFiles/rebuild_cache.dir

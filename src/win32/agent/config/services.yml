@@ -1,0 +1,179 @@
+# Supervisor Service Configuration
+# This file defines all processes managed by the Windows Supervisor Service
+
+services:
+  # RiskNoX Backend API Server
+  - name: backend_server
+    enabled: true
+    description: "RiskNoX Security Agent Backend API Server"
+    cmd:
+      - ".venv\\Scripts\\python.exe"
+      - "backend_server.py"
+    cwd: "."
+    env:
+      FLASK_ENV: production
+      PYTHONUNBUFFERED: "1"
+    restart_policy: always
+    max_restarts: 999
+    restart_delay: 5
+    backoff_multiplier: 1.5
+    max_restart_delay: 180
+    start_delay: 0
+    stop_timeout: 30
+    stop_signal: SIGTERM
+    run_as_user: false  # Run as interactive user for registry access
+    healthcheck:
+      enabled: true
+      type: http
+      url: "http://127.0.0.1:5000/health"
+      interval: 30
+      timeout: 10
+      retries: 3
+    dependencies: []
+    
+  # RiskNoX Service Control Backend
+  - name: service_control_backend
+    enabled: true
+    description: "RiskNoX Service Control Web Interface Backend"
+    cmd:
+      - ".venv\\Scripts\\python.exe"
+      - "service_control_backend.py"
+    cwd: "."
+    env:
+      FLASK_ENV: production
+      PYTHONUNBUFFERED: "1"
+    restart_policy: always
+    max_restarts: 999
+    restart_delay: 5
+    backoff_multiplier: 1.5
+    max_restart_delay: 180
+    start_delay: 2
+    stop_timeout: 30
+    stop_signal: SIGTERM
+    run_as_user: false  # Run as interactive user for system control
+    healthcheck:
+      enabled: true
+      type: http
+      url: "http://127.0.0.1:5001/health"
+      interval: 30
+      timeout: 10
+      retries: 3
+    dependencies: []
+    
+  # RiskNoX Agent Polling Service
+  - name: agent_poll
+    enabled: true
+    description: "RiskNoX Agent Polling and Command Execution Service (Disabled - integrated into monitoring_agent)"
+    cmd:
+      - ".venv\\Scripts\\python.exe"
+      - "agent_poll.py"
+    cwd: "."
+    env:
+      PYTHONUNBUFFERED: "1"
+    restart_policy: always
+    max_restarts: 5
+    restart_delay: 5
+    backoff_multiplier: 2.0
+    max_restart_delay: 300
+    start_delay: 10
+    stop_timeout: 30
+    stop_signal: SIGTERM
+    healthcheck:
+      enabled: true
+    dependencies:
+      - backend_server
+      
+  # Wazuh Monitoring Agent
+  - name: monitoring_agent
+    enabled: true
+    description: "Wazuh-based Security Monitoring Agent"
+    cmd:
+      - "monitoring-agent.exe"
+      - "start"
+    cwd: "."
+    env:
+      PYTHONUNBUFFERED: "1"
+    restart_policy: always
+    max_restarts: 999
+    restart_delay: 10
+    backoff_multiplier: 1.5
+    max_restart_delay: 180
+    start_delay: 5
+    stop_timeout: 45
+    stop_signal: SIGTERM
+    healthcheck:
+      enabled: false
+    dependencies: []
+    
+  # Suricata Network IDS
+  - name: suricata_ids
+    enabled: true
+    description: "Suricata Network Intrusion Detection System"
+    cmd:
+      - "suricata\\bin\\suricata.exe"
+      - "-c"
+      - "suricata\\etc\\suricata.yaml"
+      - "--windivert"
+      - "true"
+      - "-l"
+      - "suricata\\log"
+      - "--init-errors-fatal"
+    cwd: "."
+    env:
+      PYTHONUNBUFFERED: "1"
+    restart_policy: always
+    max_restarts: 999
+    restart_delay: 10
+    backoff_multiplier: 1.5
+    max_restart_delay: 180
+    start_delay: 15
+    stop_timeout: 45
+    stop_signal: SIGTERM
+    healthcheck:
+      enabled: false
+    dependencies: []
+    
+  # ClamAV Daemon (Optional - Disabled by default)
+  - name: clamd
+    enabled: false
+    description: "ClamAV Antivirus Daemon"
+    cmd:
+      - "vendor\\clamd.exe"
+      - "--config-file=vendor\\clamd.conf"
+    cwd: "."
+    env: {}
+    restart_policy: on-failure
+    max_restarts: 3
+    restart_delay: 15
+    backoff_multiplier: 2.0
+    max_restart_delay: 300
+    start_delay: 0
+    stop_timeout: 30
+    stop_signal: SIGTERM
+    healthcheck:
+      enabled: false
+    dependencies: []
+
+# Global supervisor settings
+supervisor:
+  log_level: INFO
+  log_file: "logs\\supervisor.log"
+  log_max_size: 10485760  # 10 MB
+  log_backup_count: 5
+  pid_file: "state\\supervisor.pid"
+  control_api:
+    enabled: true
+    host: "127.0.0.1"
+    port: 8765
+    auth_token_file: "config\\supervisor_token.txt"
+  event_log:
+    enabled: true
+    source: "RiskNoX Supervisor"
+  network_interface_detection:
+    enabled: true
+    prefer_wifi: true
+    fallback: "any"
+  crash_dumps:
+    enabled: true
+    directory: "logs\\crash_dumps"
+    max_dumps: 10

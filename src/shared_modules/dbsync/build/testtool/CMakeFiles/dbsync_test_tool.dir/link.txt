@@ -1,0 +1,3 @@
+/usr/bin/cmake -E rm -f CMakeFiles/dbsync_test_tool.dir/objects.a
+/usr/bin/i686-w64-mingw32-ar qc CMakeFiles/dbsync_test_tool.dir/objects.a @CMakeFiles/dbsync_test_tool.dir/objects1
+/usr/bin/i686-w64-mingw32-g++-posix -g -Wall -Wextra -std=c++14 -pthread -O2 -g -DNDEBUG -Wl,--whole-archive CMakeFiles/dbsync_test_tool.dir/objects.a -Wl,--no-whole-archive -o ../bin/dbsync_test_tool.exe -Wl,--out-implib,../lib/libdbsync_test_tool.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/dbsync_test_tool.dir/linkLibs.rsp

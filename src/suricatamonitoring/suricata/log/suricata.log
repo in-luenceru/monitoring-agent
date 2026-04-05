@@ -1,0 +1,196 @@
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: cpu: CPUs/cores online: 16
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: suricata: Setting engine mode to IDS mode by default
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: exception-policy: master exception-policy set to: auto
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: win32-syscall: Found a global MTU of 1500
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: logopenfile: fast output device (regular) initialized: fast.log
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: logopenfile: stats output device (regular) initialized: stats.log
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[22348 - Suricata-Main] 2025-10-13 12:48:37 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[30892 - RX-1] 2025-10-13 12:48:38 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[22348 - Suricata-Main] 2025-10-13 12:48:38 Warning: suricata: setrlimit unavailable.
+[22348 - Suricata-Main] 2025-10-13 12:48:38 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: cpu: CPUs/cores online: 16
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: suricata: Setting engine mode to IDS mode by default
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: exception-policy: master exception-policy set to: auto
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: win32-syscall: Found a global MTU of 1500
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: logopenfile: fast output device (regular) initialized: fast.log
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: logopenfile: stats output device (regular) initialized: stats.log
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[18348 - Suricata-Main] 2025-10-13 12:51:01 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[29396 - RX-1] 2025-10-13 12:51:02 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[18348 - Suricata-Main] 2025-10-13 12:51:02 Warning: suricata: setrlimit unavailable.
+[18348 - Suricata-Main] 2025-10-13 12:51:02 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: cpu: CPUs/cores online: 16
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: suricata: Setting engine mode to IDS mode by default
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: exception-policy: master exception-policy set to: auto
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: win32-syscall: Found a global MTU of 1500
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: logopenfile: fast output device (regular) initialized: fast.log
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: logopenfile: stats output device (regular) initialized: stats.log
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[16544 - RX-1] 2025-10-13 13:37:25 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Warning: suricata: setrlimit unavailable.
+[13900 - Suricata-Main] 2025-10-13 13:37:25 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[33928 - Suricata-Main] 2025-10-13 13:54:29 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[33928 - Suricata-Main] 2025-10-13 13:54:29 Info: cpu: CPUs/cores online: 16
+[33928 - Suricata-Main] 2025-10-13 13:54:29 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[33928 - Suricata-Main] 2025-10-13 13:54:29 Info: suricata: Setting engine mode to IDS mode by default
+[33928 - Suricata-Main] 2025-10-13 13:54:29 Info: exception-policy: master exception-policy set to: auto
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Info: win32-syscall: Found a global MTU of 1500
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Info: logopenfile: fast output device (regular) initialized: fast.log
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Info: logopenfile: stats output device (regular) initialized: stats.log
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[26616 - RX-1] 2025-10-13 13:54:30 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Warning: suricata: setrlimit unavailable.
+[33928 - Suricata-Main] 2025-10-13 13:54:30 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: cpu: CPUs/cores online: 16
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: suricata: Setting engine mode to IDS mode by default
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: exception-policy: master exception-policy set to: auto
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: win32-syscall: Found a global MTU of 1500
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: logopenfile: fast output device (regular) initialized: fast.log
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: logopenfile: stats output device (regular) initialized: stats.log
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[24132 - RX-1] 2025-10-13 14:06:14 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Warning: suricata: setrlimit unavailable.
+[29752 - Suricata-Main] 2025-10-13 14:06:14 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: cpu: CPUs/cores online: 4
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: suricata: Setting engine mode to IDS mode by default
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: exception-policy: master exception-policy set to: auto
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: win32-syscall: Found a global MTU of 1500
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: logopenfile: fast output device (regular) initialized: fast.log
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[8940 - Suricata-Main] 2025-10-28 17:35:51 Info: logopenfile: stats output device (regular) initialized: stats.log
+[8940 - Suricata-Main] 2025-10-28 17:35:52 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[8940 - Suricata-Main] 2025-10-28 17:35:52 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[8940 - Suricata-Main] 2025-10-28 17:35:52 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[6600 - RX-1] 2025-10-28 17:35:54 Info: win32-syscall: Obtaining offload state failed, device "VirtualBox Host-Only Ethernet Adapter" may not support offload. Error: 0x80041001
+[6600 - RX-1] 2025-10-28 17:35:54 Info: win32-syscall: Obtaining offload state failed, device "Microsoft Wi-Fi Direct Virtual Adapter" may not support offload. Error: 0x80041001
+[6600 - RX-1] 2025-10-28 17:35:55 Info: win32-syscall: Obtaining offload state failed, device "Microsoft Wi-Fi Direct Virtual Adapter #2" may not support offload. Error: 0x80041001
+[6600 - RX-1] 2025-10-28 17:35:55 Info: win32-syscall: Obtaining offload state failed, device "Intel(R) Dual Band Wireless-AC 3160" may not support offload. Error: 0x80041001
+[6600 - RX-1] 2025-10-28 17:35:55 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[8940 - Suricata-Main] 2025-10-28 17:35:55 Warning: suricata: setrlimit unavailable.
+[8940 - Suricata-Main] 2025-10-28 17:35:55 Notice: threads: Threads created -> RX: 1 W: 4 TX: 1 FM: 1 FR: 1   Engine started.
+[7568 - Suricata-Main] 2025-10-28 18:12:32 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[7568 - Suricata-Main] 2025-10-28 18:12:32 Info: cpu: CPUs/cores online: 16
+[7568 - Suricata-Main] 2025-10-28 18:12:32 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[7568 - Suricata-Main] 2025-10-28 18:12:32 Info: suricata: Setting engine mode to IDS mode by default
+[7568 - Suricata-Main] 2025-10-28 18:12:32 Info: exception-policy: master exception-policy set to: auto
+[7568 - Suricata-Main] 2025-10-28 18:12:32 Info: win32-syscall: Found a global MTU of 1500
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Info: logopenfile: fast output device (regular) initialized: fast.log
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Info: logopenfile: stats output device (regular) initialized: stats.log
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[9136 - RX-1] 2025-10-28 18:12:33 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Warning: suricata: setrlimit unavailable.
+[7568 - Suricata-Main] 2025-10-28 18:12:33 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[4716 - Suricata-Main] 2025-10-28 18:25:51 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[4716 - Suricata-Main] 2025-10-28 18:25:51 Info: cpu: CPUs/cores online: 16
+[4716 - Suricata-Main] 2025-10-28 18:25:51 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[4716 - Suricata-Main] 2025-10-28 18:25:51 Info: suricata: Setting engine mode to IDS mode by default
+[4716 - Suricata-Main] 2025-10-28 18:25:51 Info: exception-policy: master exception-policy set to: auto
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Info: win32-syscall: Found a global MTU of 1500
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Info: logopenfile: fast output device (regular) initialized: fast.log
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Info: logopenfile: stats output device (regular) initialized: stats.log
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[6336 - RX-1] 2025-10-28 18:25:52 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Warning: suricata: setrlimit unavailable.
+[4716 - Suricata-Main] 2025-10-28 18:25:52 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: cpu: CPUs/cores online: 16
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: suricata: Setting engine mode to IDS mode by default
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: exception-policy: master exception-policy set to: auto
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: win32-syscall: Found a global MTU of 1500
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: logopenfile: fast output device (regular) initialized: fast.log
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: logopenfile: stats output device (regular) initialized: stats.log
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[18324 - Suricata-Main] 2025-10-28 18:38:12 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[12968 - RX-1] 2025-10-28 18:38:12 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[18324 - Suricata-Main] 2025-10-28 18:38:13 Warning: suricata: setrlimit unavailable.
+[18324 - Suricata-Main] 2025-10-28 18:38:13 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: cpu: CPUs/cores online: 16
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: suricata: Setting engine mode to IDS mode by default
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: exception-policy: master exception-policy set to: auto
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: win32-syscall: Found a global MTU of 1500
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: logopenfile: fast output device (regular) initialized: fast.log
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: logopenfile: stats output device (regular) initialized: stats.log
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[8880 - RX-1] 2025-10-28 18:44:07 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Warning: suricata: setrlimit unavailable.
+[7516 - Suricata-Main] 2025-10-28 18:44:07 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: cpu: CPUs/cores online: 16
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: suricata: Setting engine mode to IDS mode by default
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: exception-policy: master exception-policy set to: auto
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: win32-syscall: Found a global MTU of 1500
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: logopenfile: fast output device (regular) initialized: fast.log
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: logopenfile: stats output device (regular) initialized: stats.log
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[19060 - Suricata-Main] 2025-10-28 19:33:49 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[10584 - RX-1] 2025-10-28 19:33:49 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[19060 - Suricata-Main] 2025-10-28 19:33:50 Warning: suricata: setrlimit unavailable.
+[19060 - Suricata-Main] 2025-10-28 19:33:50 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Notice: suricata: This is Suricata version 8.0.0 RELEASE running in SYSTEM mode
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: cpu: CPUs/cores online: 16
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Notice: runmodes: thread stack size of 0 too small: setting to 512k
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: suricata: Setting engine mode to IDS mode by default
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: exception-policy: master exception-policy set to: auto
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: win32-syscall: Found a global MTU of 1500
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: coredump-config: Configuring core dump is not yet supported on Windows.
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: logopenfile: fast output device (regular) initialized: fast.log
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: logopenfile: eve-log output device (regular) initialized: eve.json
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: logopenfile: stats output device (regular) initialized: stats.log
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: detect: 7 rule files processed. 277 rules successfully loaded, 0 rules failed, 0 rules skipped
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Warning: threshold-config: Error opening file: "C:\Program Files\Suricata\\\threshold.config": No such file or directory
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Info: detect: 277 signatures processed. 0 are IP-only rules, 0 are inspecting packet payload, 95 inspect application layer, 110 are decoder event only
+[7432 - RX-1] 2025-10-28 19:40:39 Info: win32-syscall: Obtaining offload state failed, device "Software Loopback Interface 1" may not support offload. Error: 0x80041002
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Warning: suricata: setrlimit unavailable.
+[14020 - Suricata-Main] 2025-10-28 19:40:39 Notice: threads: Threads created -> RX: 1 W: 16 TX: 1 FM: 1 FR: 1   Engine started.

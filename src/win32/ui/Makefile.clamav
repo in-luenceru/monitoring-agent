@@ -1,0 +1,29 @@
+# Makefile for ClamAV UI
+
+CC=x86_64-w64-mingw32-gcc
+WINDRES=x86_64-w64-mingw32-windres
+CFLAGS=-Wall -O2 -DWIN32 -mwindows
+LDFLAGS=-lcomctl32 -ladvapi32 -lshell32 -lole32 -luuid
+
+# Output
+TARGET=clamav_ui.exe
+
+# Source files
+SOURCES=clamav_ui.c
+RC_FILE=clamav_ui.rc
+RES_FILE=clamav_ui.res
+MANIFEST=clamav_ui.exe.manifest
+
+# Build
+all: $(TARGET)
+
+$(RES_FILE): $(RC_FILE) $(MANIFEST)
+	$(WINDRES) $(RC_FILE) -O coff -o $(RES_FILE)
+
+$(TARGET): $(SOURCES) $(RES_FILE)
+	$(CC) $(CFLAGS) $(SOURCES) $(RES_FILE) -o $(TARGET) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET) $(RES_FILE) *.o
+
+.PHONY: all clean
