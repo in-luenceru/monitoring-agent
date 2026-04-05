@@ -1,57 +1,41 @@
 #!/bin/bash
 # run-macos-vm.sh
-# Launches the macOS VM using Docker-OSX with KVM acceleration
-# Stores the persistent macOS disk image on the USB drive so
-# you get full 170 GB and keep your macOS install between reboots.
+# Launches the macOS VM using Docker-OSX with KVM acceleration.
+# The persistent macOS disk image is stored at ~/macos-vm/macOS.img
 
 set -e
 
-MOUNT_POINT="/mnt/usb"
-VM_DIR="${MOUNT_POINT}/macos-vm"
-DISK_IMAGE="${VM_DIR}/macOS.img"
-
-# ── Ensure USB is mounted ─────────────────────
-if ! mountpoint -q "$MOUNT_POINT"; then
-    echo "USB not mounted. Mounting..."
-    # Find the USB partition by label
-    USB_PART=$(blkid -L macos-vm 2>/dev/null)
-    if [ -z "$USB_PART" ]; then
-        echo "ERROR: Cannot find USB partition labeled 'macos-vm'."
-        echo "Run: sudo blkid  to find your USB, then: sudo mount /dev/sdX1 /mnt/usb"
-        exit 1
-    fi
-    sudo mount "$USB_PART" "$MOUNT_POINT"
-fi
-
-mkdir -p "$VM_DIR"
+DISK_IMAGE="/home/anandhu/macos-vm/macOS.img"
 
 echo "======================================"
 echo " Monitoring Agent - macOS VM Launcher"
 echo "======================================"
-echo " VM disk  : $DISK_IMAGE"
-df -h "$MOUNT_POINT" | tail -1
+echo " VM disk  : $DISK_IMAGE ($(du -sh "$DISK_IMAGE" 2>/dev/null | cut -f1) used)"
+df -h / | awk 'NR==2 {printf " Host disk: %s free of %s\n", $4, $2}'
 echo ""
 
-# ── Create persistent disk image if first run ──
+# ── Create persistent disk image if missing ───
 if [ ! -f "$DISK_IMAGE" ]; then
-    echo "[*] First run: creating 80 GB persistent macOS disk image..."
-    qemu-img create -f qcow2 "$DISK_IMAGE" 80G
+    echo "[*] Creating 30 GB persistent macOS disk image..."
+    mkdir -p "$(dirname "$DISK_IMAGE")"
+    qemu-img create -f qcow2 "$DISK_IMAGE" 30G
     echo "    Created: $DISK_IMAGE"
     echo ""
 fi
 
 # ── Check KVM access ──────────────────────────
 if [ ! -r /dev/kvm ]; then
-    echo "WARNING: /dev/kvm not accessible. Run: sudo usermod -aG kvm $USER && newgrp kvm"
+    echo "ERROR: /dev/kvm not accessible."
+    echo "Run: sudo chmod 666 /dev/kvm"
     exit 1
 fi
 
-echo "[*] Starting macOS VM (Docker-OSX / Monterey)..."
-echo "    VNC available at vnc://localhost:5999 (use Remmina or TigerVNC)"
-echo "    SSH available at: ssh -p 50922 user@localhost (after macOS boots)"
+echo "[*] Starting macOS VM (Docker-OSX)..."
+echo "    VNC  : open vnc://localhost:5999 in Remmina or TigerVNC"
+echo "    SSH  : ssh -p 50922 user@localhost  (once macOS boots)"
 echo ""
-echo "    FIRST BOOT: macOS installer will open - install to 'QEMU HARDDISK'"
-echo "    SUBSEQUENT BOOTS: macOS loads directly from the saved disk image."
+echo "    FIRST BOOT : macOS installer opens → install to 'QEMU HARDDISK'"
+echo "    LATER BOOTS: macOS loads directly from the saved disk image."
 echo ""
 
 # ── Run Docker-OSX with persistent disk ───────
@@ -60,7 +44,7 @@ docker run -it \
     --rm \
     --device /dev/kvm \
     --device /dev/snd \
-    -e RAM=8 \
+    -e RAM=6 \
     -e CPUS=4 \
     -p 50922:10022 \
     -p 5999:5999 \
@@ -69,7 +53,7 @@ docker run -it \
     -e GENERATE_UNIQUE=true \
     -e MASTER_PLIST_URL='https://raw.githubusercontent.com/sickcodes/osx-serial-generator/master/config-custom.plist' \
     -v "${DISK_IMAGE}:/image" \
-    sickcodes/docker-osx:monterey
+    sickcodes/docker-osx:latest
 
 echo ""
 echo "VM session ended. Your macOS install is saved at:"
