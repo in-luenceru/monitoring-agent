@@ -62,7 +62,7 @@ jobs:
   build-intel64:
     name: Build macOS agent (intel64)
     if: ${{ inputs.architecture == 'intel64' }}
-    runs-on: macos-13
+    runs-on: macos-14
 
     steps:
       - name: Checkout repository
@@ -110,7 +110,7 @@ jobs:
   build-arm64:
     name: Build macOS agent (arm64)
     if: ${{ inputs.architecture == 'arm64' }}
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
