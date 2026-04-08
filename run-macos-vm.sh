@@ -5,7 +5,7 @@
 
 set -e
 
-DISK_IMAGE="/home/anandhu/macos-vm/macOS.img"
+DISK_IMAGE="/home/anandhu/macos-vm/mac_hdd_ng.img"
 
 echo "======================================"
 echo " Monitoring Agent - macOS VM Launcher"
@@ -16,9 +16,9 @@ echo ""
 
 # ── Create persistent disk image if missing ───
 if [ ! -f "$DISK_IMAGE" ]; then
-    echo "[*] Creating 30 GB persistent macOS disk image..."
+    echo "[*] Creating 60 GB persistent macOS disk image (qcow2)..."
     mkdir -p "$(dirname "$DISK_IMAGE")"
-    qemu-img create -f qcow2 "$DISK_IMAGE" 30G
+    qemu-img create -f qcow2 "$DISK_IMAGE" 60G
     echo "    Created: $DISK_IMAGE"
     echo ""
 fi
@@ -28,6 +28,19 @@ if [ ! -r /dev/kvm ]; then
     echo "[*] Fixing /dev/kvm permissions..."
     sudo chmod 666 /dev/kvm
 fi
+
+# ── Reuse existing container if stopped, else create fresh ───────
+if docker ps -a --format '{{.Names}}' | grep -q "^macos-vm$"; then
+    STATUS=$(docker inspect macos-vm --format '{{.State.Status}}')
+    if [ "$STATUS" = "running" ]; then
+        echo "[*] Container already running — connecting to VNC..."
+    else
+        echo "[*] Restarting existing container (macOS install preserved)..."
+        docker start macos-vm
+    fi
+else
+    echo "[*] Creating new container..."
+    docker rm -f macos-vm 2>/dev/null || true
 
 echo "[*] Starting macOS VM (headless - VNC only)..."
 echo "    ┌─────────────────────────────────────────────┐"
@@ -48,18 +61,20 @@ echo ""
 # EXTRA display flag : forces QEMU to use its built-in VNC server
 #                      instead of GTK (GTK fails without a desktop display)
 # Port 5999          : QEMU VNC display :99  (5900 + 99 = 5999)
-docker run -d \
-    --name macos-vm \
-    --device /dev/kvm \
-    -e RAM=4 \
-    -e CPUS=2 \
-    -p 50922:10022 \
-    -p 5999:5999 \
-    -e GENERATE_UNIQUE=true \
-    -e EXTRA="-display vnc=0.0.0.0:99,password=off -audiodev none,id=noaudio -machine q35,usb=on" \
-    -e MASTER_PLIST_URL='https://raw.githubusercontent.com/sickcodes/osx-serial-generator/master/config-custom.plist' \
-    -v "${DISK_IMAGE}:/image" \
-    sickcodes/docker-osx:latest
+# Disk mounted at /home/user/mac_hdd_ng.img — the path docker-osx expects
+    docker run -d \
+        --name macos-vm \
+        --device /dev/kvm \
+        -e RAM=4 \
+        -e CPUS=2 \
+        -p 50922:10022 \
+        -p 5999:5999 \
+        -e GENERATE_UNIQUE=true \
+        -e EXTRA="-display vnc=0.0.0.0:99,password=off -audiodev none,id=noaudio" \
+        -e MASTER_PLIST_URL='https://raw.githubusercontent.com/sickcodes/osx-serial-generator/master/config-custom.plist' \
+        -v "${DISK_IMAGE}:/home/user/mac_hdd_ng.img" \
+        sickcodes/docker-osx:latest
+fi
 
 echo ""
 echo "[*] VM container started in background (ID: $(docker ps -qf name=macos-vm))"
