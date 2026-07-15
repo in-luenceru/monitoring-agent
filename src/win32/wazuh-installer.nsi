@@ -236,7 +236,7 @@ Section "Monitoring Agent (required)" MainSec
     File /oname=rsync.dll ..\shared_modules\rsync\build\bin\rsync.dll
     File /oname=sysinfo.dll ..\data_provider\build\bin\sysinfo.dll
     File /oname=syscollector.dll ..\wazuh_modules\syscollector\build\bin\syscollector.dll
-    File /oname=libfimdb.dll ..\syscheckd/build/bin/libfimdb.dll
+    File /oname=libfimdb.dll ..\syscheckd\build\bin\libfimdb.dll
     File /oname=queue\syscollector\norm_config.json ..\wazuh_modules\syscollector\norm_config.json
     File VERSION.json
 
@@ -308,8 +308,7 @@ Section "Monitoring Agent (required)" MainSec
     File /oname=suricata\rules\tls-events.rules suricata\rules\tls-events.rules
     File /oname=suricata\rules\websocket-events.rules suricata\rules\websocket-events.rules
     
-    ; install Suricata log files
-    File /oname=suricata\log\suricata.log suricata\log\suricata.log
+    ; 
     
     ; install Npcap files
     File /oname=npcap\NpcapHelper.exe npcap\NpcapHelper.exe
@@ -372,8 +371,6 @@ Section "Monitoring Agent (required)" MainSec
     File /oname=clamav\vcruntime140_1.dll vendor\vcruntime140_1.dll
     
     ; install ClamAV database files
-    File /oname=clamav\database\main.cvd vendor\database\main.cvd
-    File /oname=clamav\database\daily.cld vendor\database\daily.cld
     File /oname=clamav\database\bytecode.cvd vendor\database\bytecode.cvd
     File /oname=clamav\database\freshclam.dat vendor\database\freshclam.dat
 

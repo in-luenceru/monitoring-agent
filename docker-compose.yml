@@ -1,0 +1,74 @@
+# Monitoring Agent - Wazuh Manager Docker Compose
+# Runs the Wazuh manager with custom ports for the monitoring-agent deployment.
+#
+# Agent connection:  port 1522  (TCP, secure)
+# Agent enrollment:  port 1523  (TCP, TLS/authd)
+# Wazuh API:         port 55000 (HTTPS)
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f wazuh-manager
+#   docker compose down
+#
+# To trigger a ClamAV scan on all connected Windows agents:
+#   docker compose exec wazuh-manager bash -c \
+#     "echo 'CLAMAV_MANUAL_SCAN scan_type:quickscan' | /var/ossec/bin/wazuh-logtest"
+
+services:
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.13.1
+    container_name: monitoring-agent-manager
+    hostname: monitoring-manager
+    restart: unless-stopped
+
+    ports:
+      # Agent communication: host:1522 → container:1514 (wazuh-remoted default)
+      - "1522:1514/tcp"
+      # Agent enrollment: host:1523 → container:1523 (authd configured to port 1523)
+      - "1523:1523/tcp"
+      # Wazuh API (dashboard / REST access)
+      - "55000:55000/tcp"
+
+    environment:
+      # Disable indexer integration if you don't have Elasticsearch/OpenSearch
+      INDEXER_URL: ""
+      INDEXER_USERNAME: ""
+      INDEXER_PASSWORD: ""
+      FILEBEAT_SSL_VERIFICATION_MODE: none
+      SSL_CERTIFICATE_AUTHORITIES: ""
+      SSL_CERTIFICATE: ""
+      SSL_KEY: ""
+
+    volumes:
+      # Manager configuration - mounts our custom ossec-server.conf
+      - ./etc/ossec-server.conf:/var/ossec/etc/ossec.conf:ro
+      # Custom local decoders (ClamAV trigger decoder + local decoders)
+      - ./etc/local_decoder.xml:/var/ossec/etc/decoders/local_decoder.xml:ro
+      # Custom local rules (ClamAV AR rules + Windows state/privilege rules)
+      - ./etc/local_rules.xml:/var/ossec/etc/rules/local_rules.xml:ro
+      # Note: agent.conf is injected post-start via docker cp (see startup instructions)
+      # This avoids Windows bind-mount permission issues with wazuh-remoted's merged.mg generation
+      # Persistent data volumes (survives container restarts)
+      - wazuh-manager-data:/var/ossec/data
+      - wazuh-manager-logs:/var/ossec/logs
+      - wazuh-manager-queue:/var/ossec/queue
+      - wazuh-manager-agentkeys:/var/ossec/etc
+
+    # Health check: verify manager API is responding
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:55000/ | grep -qE '200|401' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  wazuh-manager-data:
+    driver: local
+  wazuh-manager-logs:
+    driver: local
+  wazuh-manager-queue:
+    driver: local
+  wazuh-manager-agentkeys:
+    name: monitoring-agent_wazuh-manager-etc-persist
+    driver: local

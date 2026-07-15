@@ -84,3 +84,124 @@
   </rule>
 
 </group>
+
+<!-- ============================================================ -->
+<!--  ClamAV Active Response Rules                                -->
+<!--  Triggers manual ClamAV scans on Windows agents             -->
+<!-- ============================================================ -->
+<group name="clamav,">
+
+  <!-- Base rule: Detect the trigger log -->
+  <rule id="100499" level="3">
+    <decoded_as>clamav_trigger</decoded_as>
+    <description>ClamAV manual scan trigger received</description>
+    <group>clamav,trigger,</group>
+  </rule>
+
+  <!-- Active Response trigger rule - level 10 required to fire AR -->
+  <rule id="100500" level="10">
+    <if_sid>100499</if_sid>
+    <description>Manual ClamAV scan triggered from manager</description>
+    <group>clamav,manual_scan,</group>
+  </rule>
+
+  <!-- Quick scan rule -->
+  <rule id="100501" level="5">
+    <if_sid>100500</if_sid>
+    <field name="scan_type">quickscan</field>
+    <description>Quick ClamAV scan triggered on agent</description>
+    <group>clamav,quickscan,</group>
+  </rule>
+
+  <!-- Full scan rule -->
+  <rule id="100502" level="7">
+    <if_sid>100500</if_sid>
+    <field name="scan_type">fullscan</field>
+    <description>Full system ClamAV scan triggered on agent</description>
+    <group>clamav,fullscan,</group>
+  </rule>
+
+</group>
+
+<!-- ============================================================ -->
+<!--  GROUP 1: Windows System State Events                        -->
+<!--  Parent: 18104 (Windows audit success/event catch-all)       -->
+<!--  Uses <id> element to match WinEvtLog decoded EventID field  -->
+<!--  IDs 100200-100209 (avoid collision with frequency rules)    -->
+<!-- ============================================================ -->
+<group name="local,windows,system_state,">
+
+  <!-- EventID 6005: Event Log service started = System boot/startup -->
+  <!-- Overrides built-in rule 83202 (level 5) by being its child -->
+  <rule id="100200" level="8">
+    <if_sid>83202</if_sid>
+    <id>6005</id>
+    <description>Windows: System startup - Event Log service started (boot detected)</description>
+    <group>windows,system_state,pci_dss_10.6.1,gpg13_10.1,</group>
+  </rule>
+
+  <!-- EventID 6006: Event Log service stopped = Clean shutdown -->
+  <rule id="100201" level="8">
+    <if_sid>18101</if_sid>
+    <id>6006</id>
+    <description>Windows: Clean shutdown - Event Log service stopped</description>
+    <group>windows,system_state,pci_dss_10.6.1,gpg13_10.1,</group>
+  </rule>
+
+  <!-- EventID 6008: Unexpected shutdown = Crash or power loss -->
+  <rule id="100202" level="12">
+    <if_sid>18101</if_sid>
+    <id>6008</id>
+    <description>Windows: CRITICAL - Unexpected shutdown detected (crash or power loss)</description>
+    <group>windows,system_state,pci_dss_10.6.1,gpg13_10.1,</group>
+  </rule>
+
+  <!-- EventID 1074: Planned restart or shutdown by user/process -->
+  <rule id="100203" level="8">
+    <if_sid>18101</if_sid>
+    <id>1074</id>
+    <description>Windows: Planned restart or shutdown initiated by user</description>
+    <group>windows,system_state,pci_dss_10.6.1,gpg13_10.1,</group>
+  </rule>
+
+  <!-- EventID 4608: Security auditing started = OS fully booted -->
+  <rule id="100204" level="5">
+    <if_sid>18104</if_sid>
+    <id>4608</id>
+    <description>Windows: Security auditing started - system fully booted</description>
+    <group>windows,system_state,</group>
+  </rule>
+
+</group>
+
+<!-- ============================================================ -->
+<!--  GROUP 2: Sensitive Privilege Use                            -->
+<!--  IDs 100210-100219                                           -->
+<!-- ============================================================ -->
+<group name="local,windows,privilege_use,">
+
+  <!-- EventID 4672: Special privileges assigned to new logon -->
+  <rule id="100210" level="7">
+    <if_sid>18104</if_sid>
+    <id>4672</id>
+    <description>Windows: Special privileges assigned to new logon (privileged account login)</description>
+    <group>windows,privilege_escalation,authentication_success,pci_dss_10.2.5,</group>
+  </rule>
+
+  <!-- EventID 4688: New process created -->
+  <rule id="100211" level="4">
+    <if_sid>18104</if_sid>
+    <id>4688</id>
+    <description>Windows: New process created</description>
+    <group>windows,process_monitor,</group>
+  </rule>
+
+  <!-- EventID 4673: Sensitive privilege use failure = suspicious -->
+  <rule id="100212" level="8">
+    <if_sid>18108</if_sid>
+    <id>4673</id>
+    <description>Windows: Sensitive privilege use - failed attempt (potential escalation)</description>
+    <group>windows,privilege_escalation,pci_dss_10.2.5,</group>
+  </rule>
+
+</group>

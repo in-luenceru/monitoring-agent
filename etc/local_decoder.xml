@@ -24,3 +24,20 @@
 <decoder name="local_decoder_example">
     <program_name>local_decoder_example</program_name>
 </decoder>
+
+<!--
+  ClamAV Manual Scan Trigger Decoders
+  Parses log messages of the form:
+    CLAMAV_MANUAL_SCAN scan_type:quickscan
+    CLAMAV_MANUAL_SCAN scan_type:fullscan
+  Inject via: echo "CLAMAV_MANUAL_SCAN scan_type:quickscan" | /var/ossec/bin/wazuh-logtest
+-->
+<decoder name="clamav_trigger">
+  <prematch>^CLAMAV_MANUAL_SCAN</prematch>
+</decoder>
+
+<decoder name="clamav_trigger_params">
+  <parent>clamav_trigger</parent>
+  <regex offset="after_parent">scan_type:(\w+)</regex>
+  <order>scan_type</order>
+</decoder>
